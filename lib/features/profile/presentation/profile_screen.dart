@@ -93,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: AppBottomNav(
@@ -113,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onProfileTap: () {},
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
               ],
             ),
           ],
