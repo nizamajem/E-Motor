@@ -280,9 +280,9 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _InfoTile(
-                  label: 'Battery',
-                  value: '60%',
-                  icon: Icons.battery_charging_full_rounded,
+                  label: 'Carbon Reduction',
+                  value: '5,19',
+                  icon: Icons.eco_rounded,
                   labelStyle: label,
                   valueStyle: value,
                   dimmed: dimmed,
@@ -554,8 +554,7 @@ class _LockSliderState extends State<_LockSlider> {
       (t * 1.2).clamp(0.0, 1.0),
     )!;
     final isLocked = !widget.isActive;
-    final statusIcon =
-        isLocked ? Icons.lock_rounded : Icons.lock_open_rounded;
+    final statusIcon = isLocked ? Icons.lock_rounded : Icons.lock_open_rounded;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: GestureDetector(
@@ -613,7 +612,7 @@ class _LockSliderState extends State<_LockSlider> {
                       ),
                     ),
                   ],
-                  ),
+                ),
               ),
               AnimatedAlign(
                 duration: const Duration(milliseconds: 200),
