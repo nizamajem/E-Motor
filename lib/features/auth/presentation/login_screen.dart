@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../dashboard/presentation/dashboard_screen.dart';
+import '../../rental/data/rental_service.dart';
+import '../../rental/data/emotor_service.dart';
 import '../../../core/navigation/app_route.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/session/session_manager.dart';
+import '../../../core/network/api_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,9 +18,22 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
+  bool _isLoading = false;
+  final _usernameController = TextEditingController(text: 'demo');
+  final _passwordController = TextEditingController();
+  final RentalService _rentalService = RentalService();
+  final EmotorService _emotorService = EmotorService();
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final emotorId = ApiConfig.emotorId;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -72,13 +90,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.grey.shade600,
                           ),
                         ),
+                        // Intentionally hide EMOTOR_ID warning in UI.
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 26),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
+                        ),
+                        const SizedBox(height: 26),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 18),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -93,25 +112,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: Border.all(color: const Color(0xFFE7EBF3)),
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _InputField(
-                          label: 'Email',
-                          hint: 'your@email.com',
-                          icon: Icons.mail_rounded,
-                          obscure: false,
-                        ),
-                        const SizedBox(height: 14),
-                        _InputField(
-                          label: 'Kata Sandi',
-                          hint: 'Enter your password',
-                          icon: Icons.lock_rounded,
-                          obscure: _obscure,
-                          onToggleObscure: () {
-                            setState(() => _obscure = !_obscure);
-                          },
-                        ),
-                        const SizedBox(height: 6),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _InputField(
+                            label: 'Username',
+                            hint: 'Enter your username',
+                            icon: Icons.person_rounded,
+                            controller: _usernameController,
+                            obscure: false,
+                            keyboardType: TextInputType.text,
+                          ),
+                          const SizedBox(height: 14),
+                          _InputField(
+                            label: 'Kata Sandi',
+                            hint: 'Enter your password',
+                            icon: Icons.lock_rounded,
+                            obscure: _obscure,
+                            controller: _passwordController,
+                            onToggleObscure: () {
+                              setState(() => _obscure = !_obscure);
+                            },
+                          ),
+                          const SizedBox(height: 6),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -135,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _goToDashboard,
+                            onPressed: _isLoading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF2C7BFE),
                               foregroundColor: Colors.white,
@@ -150,7 +172,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            child: const Text('Sign In'),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                                    ),
+                                  )
+                                : const Text('Sign In'),
                           ),
                         ),
                       ],
@@ -190,9 +221,98 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _goToDashboard() {
-    Navigator.of(context).pushReplacement(
-      appRoute(const DashboardScreen()),
+  Future<void> _handleLogin() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+    if (username.isEmpty || password.isEmpty) {
+      _showSnack('Username dan password harus diisi');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      await _rentalService.login(username: username, password: password);
+      // Fetch e-motor bound to this user if not provided via dart-define.
+      await _ensureEmotorId();
+      debugPrint('login screen sessionEmotorId=${SessionManager.instance.emotorId}');
+      if (!mounted) return;
+      final startNow = await _confirmStartRental();
+      RentalSession? rental;
+      if (startNow == true) {
+        try {
+          rental = await _rentalService.startRental();
+        } on ApiException catch (e) {
+          // Jika start rental gagal, tetap izinkan masuk dashboard (login sudah sukses).
+          final message = e.message.toLowerCase();
+          if (e.statusCode == 404) {
+            _showSnack('Start rental endpoint tidak ditemukan, membuka dashboard saja.');
+          } else if (e.statusCode == 400 &&
+              message.contains('bound') &&
+              message.contains('user')) {
+            _showSnack('E-motor sudah terikat ke user lain. Membuka dashboard saja.');
+          } else {
+            rethrow;
+          }
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(appRoute(DashboardScreen(initialRental: rental)));
+    } catch (e) {
+      _showSnack(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _ensureEmotorId() async {
+    if ((SessionManager.instance.emotorId ?? '').isNotEmpty) {
+      return;
+    }
+    if (ApiConfig.emotorId.isNotEmpty) {
+      SessionManager.instance.saveEmotorId(ApiConfig.emotorId);
+      return;
+    }
+    final userId = SessionManager.instance.user?.userId;
+    if (userId == null || userId.isEmpty) return;
+    final emotor = await _emotorService.fetchAssignedToUser(userId);
+    if (emotor != null) {
+      SessionManager.instance.saveEmotorId(emotor.id);
+    } else {
+      _showSnack('Tidak menemukan e-motor yang terikat ke akun ini.');
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<bool?> _confirmStartRental() {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Mulai Rental?'),
+          content: const Text('Login berhasil. Mulai rental sekarang?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Nanti'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Mulai'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -204,6 +324,8 @@ class _InputField extends StatelessWidget {
     required this.icon,
     this.obscure = false,
     this.onToggleObscure,
+    this.controller,
+    this.keyboardType,
   });
 
   final String label;
@@ -211,6 +333,8 @@ class _InputField extends StatelessWidget {
   final IconData icon;
   final bool obscure;
   final VoidCallback? onToggleObscure;
+  final TextEditingController? controller;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +373,8 @@ class _InputField extends StatelessWidget {
               Expanded(
                 child: TextField(
                   obscureText: obscure,
+                  controller: controller,
+                  keyboardType: keyboardType,
                   decoration: InputDecoration(
                     hintText: hint,
                     border: InputBorder.none,

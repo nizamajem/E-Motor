@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,11 +7,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../history/presentation/history_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../rental/data/rental_service.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../core/navigation/app_route.dart';
+import '../../../core/session/session_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.initialRental});
+
+  final RentalSession? initialRental;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -18,10 +23,46 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isActive = false;
+  bool _isToggling = false;
+  RideStatus? _status;
+  RentalSession? _rental;
+  final RentalService _rentalService = RentalService();
+  StreamSubscription<RideStatus>? _statusSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _rental = widget.initialRental ?? SessionManager.instance.rental;
+    _isActive = _rental?.motorOn ?? false;
+    _startStatusListener();
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    super.dispose();
+  }
+
+  void _startStatusListener() {
+    if (SessionManager.instance.token == null) return;
+    _statusSub = _rentalService.statusStream().listen(
+      (data) {
+        if (!mounted) return;
+        setState(() {
+          _status = data;
+          _isActive = data.motorOn;
+        });
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final dimmed = !_isActive;
+    final rental = _rental;
+    final status = _status;
+    final riderName = SessionManager.instance.user?.name ?? 'Rider';
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -42,11 +83,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             fontWeight: FontWeight.w800,
                             color: Colors.black,
                           ),
-                          children: const [
-                            TextSpan(text: 'Welcome '),
+                          children: [
+                            const TextSpan(text: 'Welcome '),
                             TextSpan(
-                              text: 'Ajem',
-                              style: TextStyle(color: Color(0xFF2C7BFE)),
+                              text: riderName,
+                              style: const TextStyle(color: Color(0xFF2C7BFE)),
                             ),
                           ],
                         ),
@@ -72,20 +113,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         _ScooterHero(isActive: _isActive),
                         const SizedBox(height: 8),
-                        _PlateBadge(isActive: _isActive),
+                        _PlateBadge(
+                          isActive: _isActive,
+                          plate: rental?.plate ?? 'N/A',
+                          battery: status?.batteryPercent ?? rental?.batteryPercent,
+                        ),
                         const SizedBox(height: 10),
                         _GridCards(
+                          status: status,
+                          rental: rental,
                           isActive: _isActive,
                           dimmed: dimmed,
-                          onToggle: (value) =>
-                              setState(() => _isActive = value),
+                          isBusy: _isToggling,
+                          onToggle: _handleToggle,
                         ),
                         const SizedBox(height: 10),
                         _LockSlider(
                           isActive: _isActive,
-                          onToggle: (value) {
-                            setState(() => _isActive = value);
-                          },
+                          disabled: _isToggling,
+                          onToggle: _handleToggle,
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -114,6 +160,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handleToggle(bool value) async {
+    if (_isToggling) return;
+    setState(() => _isToggling = true);
+    try {
+      final status = await _rentalService.toggleMotor(value);
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _isActive = status.motorOn;
+      });
+    } catch (e) {
+      _showSnack('Gagal mengirim perintah: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isToggling = false);
+      }
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 }
@@ -185,13 +256,18 @@ class _ScooterHero extends StatelessWidget {
 }
 
 class _PlateBadge extends StatelessWidget {
-  const _PlateBadge({required this.isActive});
+  const _PlateBadge(
+      {required this.isActive, required this.plate, this.battery});
 
   final bool isActive;
+  final String plate;
+  final double? battery;
 
   @override
   Widget build(BuildContext context) {
     final muted = !isActive;
+    final batteryText =
+        battery != null ? 'Battery ${(battery!).toStringAsFixed(0)}%' : 'Locked';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -222,13 +298,27 @@ class _PlateBadge extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            'DR 1234 PW',
-            style: GoogleFonts.poppins(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-              color: Colors.black,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                plate,
+                style: GoogleFonts.poppins(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                batteryText,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 10),
           Container(
@@ -253,15 +343,28 @@ class _PlateBadge extends StatelessWidget {
 }
 
 class _GridCards extends StatelessWidget {
-  const _GridCards(
-      {required this.isActive, required this.dimmed, required this.onToggle});
+  const _GridCards({
+    required this.isActive,
+    required this.dimmed,
+    required this.onToggle,
+    required this.isBusy,
+    this.status,
+    this.rental,
+  });
 
   final bool isActive;
   final bool dimmed;
+  final bool isBusy;
   final ValueChanged<bool> onToggle;
+  final RideStatus? status;
+  final RentalSession? rental;
 
   @override
   Widget build(BuildContext context) {
+    final carbon = status?.carbonReduction ?? 0;
+    final range = status?.rangeKm ?? rental?.rangeKm ?? 0;
+    final rentalTime = status?.rentalMinutes ?? 0;
+    final ping = status?.pingQuality ?? '---';
     final label = GoogleFonts.poppins(
       fontSize: 11,
       fontWeight: FontWeight.w600,
@@ -281,7 +384,7 @@ class _GridCards extends StatelessWidget {
               Expanded(
                 child: _InfoTile(
                   label: 'Carbon Reduction',
-                  value: '5,19',
+                  value: carbon == 0 ? '--' : carbon.toStringAsFixed(2),
                   icon: Icons.eco_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -292,7 +395,7 @@ class _GridCards extends StatelessWidget {
               Expanded(
                 child: _InfoTile(
                   label: 'Ping',
-                  value: 'Good',
+                  value: ping,
                   icon: Icons.wifi_tethering_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -310,7 +413,7 @@ class _GridCards extends StatelessWidget {
               Expanded(
                 child: _InfoTile(
                   label: 'Range',
-                  value: '125 km',
+                  value: range == 0 ? '--' : '${range.toStringAsFixed(0)} km',
                   icon: Icons.location_on_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -321,7 +424,7 @@ class _GridCards extends StatelessWidget {
               Expanded(
                 child: _InfoTile(
                   label: 'Rental Time',
-                  value: '45 min',
+                  value: rentalTime == 0 ? '--' : '$rentalTime min',
                   icon: Icons.timer_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -340,7 +443,7 @@ class _GridCards extends StatelessWidget {
                   color: const Color(0xFF2C7BFE),
                   active: isActive,
                   dimmed: dimmed,
-                  onTap: () => onToggle(true),
+                  onTap: isBusy ? null : () => onToggle(true),
                 ),
               ),
               const SizedBox(width: 8),
@@ -351,7 +454,7 @@ class _GridCards extends StatelessWidget {
                   color: const Color(0xFF2C7BFE),
                   active: !isActive,
                   dimmed: dimmed,
-                  onTap: () => onToggle(false),
+                  onTap: isBusy ? null : () => onToggle(false),
                 ),
               ),
             ],
@@ -520,9 +623,14 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _LockSlider extends StatefulWidget {
-  const _LockSlider({required this.isActive, required this.onToggle});
+  const _LockSlider({
+    required this.isActive,
+    required this.onToggle,
+    this.disabled = false,
+  });
 
   final bool isActive;
+  final bool disabled;
   final ValueChanged<bool> onToggle;
 
   @override
@@ -558,19 +666,24 @@ class _LockSliderState extends State<_LockSlider> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: GestureDetector(
-        onHorizontalDragUpdate: (details) {
-          setState(() {
-            _position = (_position + details.delta.dx / 120).clamp(-1.0, 1.0);
-          });
-        },
-        onHorizontalDragEnd: (_) {
-          final shouldActivate = _position > 0;
-          widget.onToggle(shouldActivate);
-          setState(() {
-            _position = shouldActivate ? 1.0 : -1.0;
-          });
-          HapticFeedback.lightImpact();
-        },
+        onHorizontalDragUpdate: widget.disabled
+            ? null
+            : (details) {
+                setState(() {
+                  _position =
+                      (_position + details.delta.dx / 120).clamp(-1.0, 1.0);
+                });
+              },
+        onHorizontalDragEnd: widget.disabled
+            ? null
+            : (_) {
+                final shouldActivate = _position > 0;
+                widget.onToggle(shouldActivate);
+                setState(() {
+                  _position = shouldActivate ? 1.0 : -1.0;
+                });
+                HapticFeedback.lightImpact();
+              },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
