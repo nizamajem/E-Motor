@@ -5,20 +5,24 @@ import 'history_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class DetailHistoryScreen extends StatelessWidget {
   const DetailHistoryScreen({
     super.key,
     required this.item,
     this.returnToLogin = false,
+    this.returnToDashboard = false,
   });
 
   final HistoryItem item;
   final bool returnToLogin;
+  final bool returnToDashboard;
 
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFF2C7BFE);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -36,7 +40,7 @@ class DetailHistoryScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Detail Perjalanan',
+                    l10n.detailTrip,
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -54,7 +58,7 @@ class DetailHistoryScreen extends StatelessWidget {
                 accent: accent,
                 onPressed: () => _openFeedbackSheet(context, accent),
               ),
-              if (returnToLogin) ...[
+              if (returnToLogin || returnToDashboard) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -69,7 +73,7 @@ class DetailHistoryScreen extends StatelessWidget {
                       elevation: 0,
                     ),
                     child: Text(
-                      'Selesai',
+                      l10n.done,
                       style: GoogleFonts.poppins(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
@@ -101,6 +105,7 @@ class DetailHistoryScreen extends StatelessWidget {
   Future<void> _openFeedbackSheet(BuildContext context, Color accent) {
     final controller = TextEditingController();
     int rating = 4;
+    final l10n = AppLocalizations.of(context);
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -143,7 +148,7 @@ class DetailHistoryScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Beri Umpan Balik',
+                      l10n.giveFeedback,
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -152,7 +157,7 @@ class DetailHistoryScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Bantu kami meningkatkan pengalaman berkendara Anda.',
+                      l10n.feedbackHint,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -189,7 +194,7 @@ class DetailHistoryScreen extends StatelessWidget {
                         controller: controller,
                         maxLines: 3,
                         decoration: InputDecoration(
-                          hintText: 'Tulis feedback Anda',
+                          hintText: l10n.feedbackInput,
                           border: InputBorder.none,
                           hintStyle: GoogleFonts.poppins(
                             fontSize: 13,
@@ -218,7 +223,7 @@ class DetailHistoryScreen extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              'Batal',
+                              l10n.cancel,
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -243,7 +248,7 @@ class DetailHistoryScreen extends StatelessWidget {
                               elevation: 0,
                             ),
                             child: Text(
-                              'Kirim',
+                              l10n.send,
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -273,6 +278,7 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final label = GoogleFonts.poppins(
       fontSize: 12,
       fontWeight: FontWeight.w600,
@@ -301,28 +307,28 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _LineEntry('Jarak Tempuh', item.distanceKm, label, value),
+          _LineEntry(l10n.distance, item.distanceKm, label, value),
           const SizedBox(height: 8),
-          _LineEntry('Jumlah Kalori', item.calories, label, value),
+          _LineEntry(l10n.rentalDuration, item.rentalDuration, label, value),
           const SizedBox(height: 8),
-          _LineEntry('Pengurangan Emisi', item.emission, label, value),
+          _LineEntry(l10n.emissionReduction, item.emission, label, value),
           const SizedBox(height: 12),
-          _SectionDivider(accent: accent, title: 'Mulai'),
+          _SectionDivider(accent: accent, title: l10n.start),
           const SizedBox(height: 8),
-          _LineEntry('Tanggal', item.date, label, value),
+          _LineEntry(l10n.date, item.date, label, value),
           const SizedBox(height: 6),
-          _LineEntry('Waktu Mulai', item.startTime, label, value),
+          _LineEntry(l10n.startTime, item.startTime, label, value),
           const SizedBox(height: 6),
-          _LineEntry('Posisi Mulai', item.startPlace, label, value,
+          _LineEntry(l10n.startPosition, item.startPlace, label, value,
               maxLines: 2),
           const SizedBox(height: 12),
-          _SectionDivider(accent: accent, title: 'Akhir'),
+          _SectionDivider(accent: accent, title: l10n.end),
           const SizedBox(height: 8),
-          _LineEntry('Tanggal', item.date, label, value),
+          _LineEntry(l10n.date, item.date, label, value),
           const SizedBox(height: 6),
-          _LineEntry('Waktu Akhir', item.endTime, label, value),
+          _LineEntry(l10n.endTime, item.endTime, label, value),
           const SizedBox(height: 6),
-          _LineEntry('Posisi Akhir', item.endPlace, label, value,
+          _LineEntry(l10n.endPosition, item.endPlace, label, value,
               maxLines: 2),
         ],
       ),
@@ -414,6 +420,7 @@ class _CostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFF2C7BFE);
+    final l10n = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -424,15 +431,15 @@ class _CostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CostLine('Biaya Berkendara', item.rideCost, accent),
+          _CostLine(l10n.rideCost, item.rideCost, accent),
           const SizedBox(height: 4),
-          _CostLine('Biaya Jeda', item.idleCost, accent),
+          _CostLine(l10n.idleCost, item.idleCost, accent),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Total Biaya',
+                l10n.totalCost,
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -496,6 +503,7 @@ class _FeedbackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SizedBox(
       width: double.infinity,
       child: TextButton(
@@ -513,7 +521,7 @@ class _FeedbackButton extends StatelessWidget {
             Icon(Icons.star_rounded, color: accent, size: 18),
             const SizedBox(width: 6),
             Text(
-              'Umpan Balik',
+              l10n.feedback,
               style: GoogleFonts.poppins(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,

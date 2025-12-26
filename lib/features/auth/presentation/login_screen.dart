@@ -5,9 +5,9 @@ import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../rental/data/rental_service.dart';
 import '../../rental/data/emotor_service.dart';
 import '../../../core/navigation/app_route.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,7 +19,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _isLoading = false;
-  bool _isFlowLoading = false;
   final _usernameController = TextEditingController(text: 'demo');
   final _passwordController = TextEditingController();
   final RentalService _rentalService = RentalService();
@@ -34,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final emotorId = ApiConfig.emotorId;
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -47,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 4),
-                  _LanguagePill(),
                   const SizedBox(height: 24),
                   Center(
                     child: Column(
@@ -73,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Welcome back!',
+                          l10n.welcomeBack,
                           style: GoogleFonts.poppins(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -82,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Sign in to continue your ride with Gridwiz E-Motor.',
+                          l10n.loginSubtitle,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
                             fontSize: 13.5,
@@ -116,8 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _InputField(
-                            label: 'Username',
-                            hint: 'Enter your username',
+                            label: l10n.username,
+                            hint: l10n.usernameHint,
                             icon: Icons.person_rounded,
                             controller: _usernameController,
                             obscure: false,
@@ -125,8 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 14),
                           _InputField(
-                            label: 'Kata Sandi',
-                            hint: 'Enter your password',
+                            label: l10n.password,
+                            hint: l10n.passwordHint,
                             icon: Icons.lock_rounded,
                             obscure: _obscure,
                             controller: _passwordController,
@@ -146,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: Text(
-                              'Forgot Password?',
+                              l10n.forgotPassword,
                               style: GoogleFonts.poppins(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w700,
@@ -158,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: (_isLoading || _isFlowLoading) ? null : _handleLogin,
+                            onPressed: _isLoading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF2C7BFE),
                               foregroundColor: Colors.white,
@@ -182,39 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       valueColor: AlwaysStoppedAnimation(Colors.white),
                                     ),
                                   )
-                                : const Text('Sign In'),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton(
-                            onPressed: (_isLoading || _isFlowLoading)
-                                ? null
-                                : _handleRunFullFlow,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF2C7BFE),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 13, horizontal: 16),
-                              side: const BorderSide(color: Color(0xFF2C7BFE)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              textStyle: GoogleFonts.poppins(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            child: _isFlowLoading
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      valueColor: AlwaysStoppedAnimation(Color(0xFF2C7BFE)),
-                                    ),
-                                  )
-                                : const Text('Run Full Flow'),
+                                : Text(l10n.signIn),
                           ),
                         ),
                       ],
@@ -231,9 +197,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.grey.shade600,
                         ),
                         children: [
-                          const TextSpan(text: "Don't have account? "),
+                          TextSpan(text: l10n.noAccount),
                           TextSpan(
-                            text: 'Contact Admin',
+                            text: l10n.contactAdmin,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -255,10 +221,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    final l10n = AppLocalizations.of(context);
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
     if (username.isEmpty || password.isEmpty) {
-      _showSnack('Username dan password harus diisi');
+      _showSnack(l10n.loginRequired);
       return;
     }
     setState(() {
@@ -270,67 +237,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await _ensureEmotorId();
       debugPrint('login screen sessionEmotorId=${SessionManager.instance.emotorId}');
       if (!mounted) return;
-      final startNow = await _confirmStartRental();
-      RentalSession? rental;
-      if (startNow == true) {
-        try {
-          rental = await _rentalService.startRental();
-        } on ApiException catch (e) {
-          // Jika start rental gagal, tetap izinkan masuk dashboard (login sudah sukses).
-          final message = e.message.toLowerCase();
-          if (e.statusCode == 404) {
-            _showSnack('Start rental endpoint tidak ditemukan, membuka dashboard saja.');
-          } else if (e.statusCode == 400 &&
-              message.contains('bound') &&
-              message.contains('user')) {
-            await _ensureEmotorId(forceRefresh: true);
-            try {
-              rental = await _rentalService.startRental();
-            } on ApiException {
-              _showSnack('E-motor sudah terikat ke user lain. Membuka dashboard saja.');
-            }
-          } else {
-            rethrow;
-          }
-        }
-      }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(appRoute(DashboardScreen(initialRental: rental)));
+      Navigator.of(context).pushReplacement(appRoute(const DashboardScreen()));
     } catch (e) {
       _showSnack(e.toString());
     } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _handleRunFullFlow() async {
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim();
-    if (username.isEmpty || password.isEmpty) {
-      _showSnack('Username dan password harus diisi');
-      return;
-    }
-    setState(() {
-      _isFlowLoading = true;
-    });
-    try {
-      await _rentalService.runFullFlow(
-        username: username,
-        password: password,
-        stepDelay: const Duration(milliseconds: 800),
-      );
-      if (!mounted) return;
-      _showSnack('Flow selesai.');
-    } catch (e) {
-      _showSnack('Flow gagal: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isFlowLoading = false;
         });
       }
     }
@@ -364,28 +278,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<bool?> _confirmStartRental() {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Mulai Rental?'),
-          content: const Text('Login berhasil. Mulai rental sekarang?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Nanti'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Mulai'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
 
 class _InputField extends StatelessWidget {
@@ -473,44 +365,6 @@ class _InputField extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _LanguagePill extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.language_rounded, size: 18, color: Color(0xFF2C7BFE)),
-          const SizedBox(width: 8),
-          Text(
-            'English',
-            style: GoogleFonts.poppins(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.expand_more_rounded,
-              size: 20, color: Colors.grey.shade500),
-        ],
-      ),
     );
   }
 }

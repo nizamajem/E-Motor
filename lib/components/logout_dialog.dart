@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/localization/app_localizations.dart';
+
 typedef LogoutAction = void Function();
 
 class LogoutDialog extends StatelessWidget {
@@ -10,6 +12,7 @@ class LogoutDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -19,7 +22,7 @@ class LogoutDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Are you sure want to log out?',
+              l10n.logoutConfirm,
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 15,
@@ -42,7 +45,7 @@ class LogoutDialog extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'No',
+                      l10n.no,
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -64,7 +67,7 @@ class LogoutDialog extends StatelessWidget {
                       elevation: 0,
                     ),
                     child: Text(
-                      'Yes',
+                      l10n.yes,
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,

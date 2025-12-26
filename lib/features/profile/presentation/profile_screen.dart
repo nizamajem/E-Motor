@@ -8,6 +8,7 @@ import '../../../core/navigation/app_route.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../components/logout_dialog.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,22 +18,77 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _displayName = 'Ajem';
-  String _fullName = 'Muhamad Nizam Azmi';
-  String _email = 'ajem@gmail.com';
-
   @override
   Widget build(BuildContext context) {
-    final entries = [
-      _ProfileEntry('Display Name', _displayName, Icons.person_rounded),
-      _ProfileEntry('Name', _fullName, Icons.badge_outlined),
-      _ProfileEntry('E-Mail', _email, Icons.email_outlined),
-      _ProfileEntry('ID card Number', '537827638298748', Icons.credit_card),
-      _ProfileEntry('Gender', 'Laki-laki', Icons.male_rounded),
-      _ProfileEntry('Age', '22', Icons.cake_outlined),
-      _ProfileEntry('Phone Number', '087325239467372', Icons.phone_rounded),
-      _ProfileEntry('Citizenship', 'Indonesia', Icons.flag_circle_rounded),
-      _ProfileEntry('Log Out', '', Icons.logout_rounded, isDestructive: true),
+    String? readText(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+
+    String? formatDate(dynamic value) {
+      final raw = readText(value);
+      if (raw == null) return null;
+      final parsed = DateTime.tryParse(raw);
+      if (parsed == null) return raw;
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      final day = parsed.day.toString().padLeft(2, '0');
+      final month = months[parsed.month - 1];
+      return '$day $month ${parsed.year}';
+    }
+
+    final profile = SessionManager.instance.userProfile ?? {};
+    final l10n = AppLocalizations.of(context);
+    final username = readText(profile['username']);
+    final fullName = readText(profile['full_name']);
+    final email = readText(profile['email']);
+    final phone = readText(profile['phone_number']);
+    final gender = readText(profile['gender']);
+    final idCard = readText(profile['id_card']);
+    final birthday = formatDate(profile['birthday']);
+    final height = readText(profile['height']);
+    final weight = readText(profile['weight']);
+
+    final displayName =
+        username ?? SessionManager.instance.user?.name ?? 'User';
+
+    final entries = <_ProfileEntry>[
+      if (displayName.isNotEmpty)
+        _ProfileEntry(l10n.displayName, displayName, Icons.person_rounded),
+      if (fullName != null)
+        _ProfileEntry(l10n.name, fullName, Icons.badge_outlined),
+      if (email != null) _ProfileEntry(l10n.email, email, Icons.email_outlined),
+      if (phone != null)
+        _ProfileEntry(l10n.phone, phone, Icons.phone_rounded),
+      if (gender != null) _ProfileEntry(l10n.gender, gender, Icons.male_rounded),
+      if (birthday != null)
+        _ProfileEntry(l10n.birthday, birthday, Icons.cake_outlined),
+      if (idCard != null)
+        _ProfileEntry(l10n.idCard, idCard, Icons.credit_card),
+      if (height != null)
+        _ProfileEntry(l10n.height, '$height cm', Icons.height_rounded),
+      if (weight != null)
+        _ProfileEntry(l10n.weight, '$weight kg', Icons.monitor_weight_rounded),
+      _ProfileEntry(
+        l10n.logout,
+        '',
+        Icons.logout_rounded,
+        isDestructive: true,
+        isLogout: true,
+      ),
     ];
 
     return Scaffold(
@@ -45,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 const SizedBox(height: 8),
                 Text(
-                  'My Profile',
+                  l10n.myProfile,
                   style: GoogleFonts.poppins(
                     fontSize: 17.5,
                     fontWeight: FontWeight.w800,
@@ -56,9 +112,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: _ProfileHeaderCard(
-                    name: _displayName,
-                    email: _email,
-                    onEdit: () => _openEditSheet(context),
+                    name: displayName,
+                    email: email ?? '-',
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -123,191 +178,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _applyEdits({
-    required String display,
-    required String full,
-    required String email,
-  }) {
-    setState(() {
-      _displayName = display;
-      _fullName = full;
-      _email = email;
-    });
-  }
-
-  Future<void> _openEditSheet(BuildContext context) async {
-    final displayController = TextEditingController(text: _displayName);
-    final fullController = TextEditingController(text: _fullName);
-    final emailController = TextEditingController(text: _email);
-    const accent = Color(0xFF2C7BFE);
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 12,
-            left: 12,
-            right: 12,
-            top: 0,
-          ),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Edit Profile',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _EditField(
-                  label: 'Display Name',
-                  controller: displayController,
-                  icon: Icons.person_rounded,
-                  accent: accent,
-                ),
-                const SizedBox(height: 10),
-                _EditField(
-                  label: 'Full Name',
-                  controller: fullController,
-                  icon: Icons.badge_outlined,
-                  accent: accent,
-                ),
-                const SizedBox(height: 10),
-                _EditField(
-                  label: 'E-Mail',
-                  controller: emailController,
-                  icon: Icons.email_outlined,
-                  accent: accent,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF7F9FC),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Fields like ID, gender, age, phone only editable by admin.',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                          side: const BorderSide(color: Color(0xFFE2E7F0)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final display = displayController.text.trim();
-                          final full = fullController.text.trim();
-                          final email = emailController.text.trim();
-                          if (display.isEmpty ||
-                              full.isEmpty ||
-                              email.isEmpty) {
-                            Navigator.of(ctx).pop();
-                            return;
-                          }
-                          _applyEdits(
-                            display: display,
-                            full: full,
-                            email: email,
-                          );
-                          Navigator.of(ctx).pop();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                          backgroundColor: accent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          'Save',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _ProfileBackground extends StatelessWidget {
@@ -331,12 +201,10 @@ class _ProfileBackground extends StatelessWidget {
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
-  const _ProfileHeaderCard(
-      {required this.name, required this.email, required this.onEdit});
+  const _ProfileHeaderCard({required this.name, required this.email});
 
   final String name;
   final String email;
-  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -392,11 +260,6 @@ class _ProfileHeaderCard extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: onEdit,
-            child: Icon(Icons.edit_outlined,
-                size: 16, color: Colors.grey.shade500),
-          ),
         ],
       ),
     );
@@ -440,14 +303,19 @@ class _Avatar extends StatelessWidget {
 }
 
 class _ProfileEntry {
-  _ProfileEntry(this.title, this.value, this.icon, {this.isDestructive = false});
+  _ProfileEntry(
+    this.title,
+    this.value,
+    this.icon, {
+    this.isDestructive = false,
+    this.isLogout = false,
+  });
 
   final String title;
   final String value;
   final IconData icon;
   final bool isDestructive;
-
-  bool get isLogout => isDestructive && title.toLowerCase().contains('log out');
+  final bool isLogout;
 }
 
 class _ProfileRow extends StatelessWidget {
@@ -458,9 +326,7 @@ class _ProfileRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isEditable = entry.title == 'Display Name' ||
-        entry.title == 'Name' ||
-        entry.title == 'E-Mail';
+    const isEditable = false;
     final isDelete = entry.isDestructive;
     final accent = isDelete ? Colors.redAccent : const Color(0xFF2C7BFE);
     return InkWell(
@@ -546,79 +412,3 @@ void _handleTap(BuildContext context, _ProfileEntry entry) {
   }
 }
 
-class _EditField extends StatelessWidget {
-  const _EditField({
-    required this.label,
-    required this.controller,
-    required this.icon,
-    required this.accent,
-    this.keyboardType,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final IconData icon;
-  final Color accent;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade800,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5EAF2)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              Container(
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F0FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 16, color: accent),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  decoration: InputDecoration(
-                    hintText: label,
-                    border: InputBorder.none,
-                    isDense: true,
-                    hintStyle: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}

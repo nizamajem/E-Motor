@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
 class RideStatus {
@@ -341,7 +342,7 @@ class RentalService {
   Future<RideStatus> fetchStatus() async {
     final rideId = SessionManager.instance.rental?.rideHistoryId;
     if (rideId == null || rideId.isEmpty) {
-      throw ApiException('Belum ada rideHistoryId. Mulai rental dulu.');
+      throw ApiException(AppLocalizations.current.noRideId);
     }
     return fetchStatusById(rideId);
   }

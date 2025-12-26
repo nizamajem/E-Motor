@@ -13,6 +13,7 @@ import '../../history/presentation/detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.initialRental});
@@ -27,7 +28,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isActive = false;
   bool _isToggling = false;
   bool _isEnding = false;
+  bool _isStartingRide = false;
   bool _hasRental = false;
+  bool _requireStart = false;
   int _elapsedSeconds = 0;
   RideStatus? _status;
   RentalSession? _rental;
@@ -41,9 +44,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
     _hasRental = (_rental?.rideHistoryId ?? '').isNotEmpty;
+    _requireStart = !_hasRental;
     _elapsedSeconds = _hasRental ? 0 : 0;
     _ensureTimer();
-    _startStatusListener();
+    if (_hasRental) {
+      _startStatusListener();
+    }
   }
 
   @override
@@ -82,6 +88,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final rental = _rental;
     final status = _status;
     final riderName = SessionManager.instance.user?.name ?? 'Rider';
+    final l10n = AppLocalizations.of(context);
     final emotorFromProfile = SessionManager.instance.emotorProfile;
     final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
     final emotorPlate = emotorFromProfile?['vehicle_number']?.toString().trim() ??
@@ -112,76 +119,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black,
-                          ),
-                          children: [
-                            const TextSpan(text: 'Welcome '),
-                            TextSpan(
-                              text: riderName,
-                              style: const TextStyle(color: Color(0xFF2C7BFE)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'A seamless electric mobility powered by real-time technology',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade600,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
                 Expanded(
-                  child: SingleChildScrollView(
+                  child: AbsorbPointer(
+                    absorbing: _requireStart,
                     child: Column(
                       children: [
-                        _ScooterHero(isActive: _isActive),
-                        const SizedBox(height: 8),
-                        _PlateBadge(
-                          isActive: _isActive,
-                          plate: status?.plate ?? rental?.plate ?? emotorFallback,
-                          battery: status?.batteryPercent ??
-                              rental?.batteryPercent ??
-                              batteryFallback,
-                        ),
                         const SizedBox(height: 10),
-                        _GridCards(
-                          status: status,
-                          rental: rental,
-                          isActive: _isActive,
-                          dimmed: dimmed,
-                          isBusy: _isToggling,
-                          isEnding: _isEnding,
-                          elapsedSeconds: _elapsedSeconds,
-                          hasRental: _hasRental,
-                          onToggle: _handleToggle,
-                          onEnd: _handleEndRental,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            children: [
+                              RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.black,
+                                  ),
+                                  children: [
+                            TextSpan(text: l10n.welcome),
+                            TextSpan(
+                              text: riderName,
+                                      style: const TextStyle(color: Color(0xFF2C7BFE)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                              l10n.tagline,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey.shade600,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        _LockSlider(
-                          isActive: _isActive,
-                          disabled: _isToggling,
-                          onToggle: _handleToggle,
+                        const SizedBox(height: 6),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _ScooterHero(isActive: _isActive),
+                                const SizedBox(height: 8),
+                                _PlateBadge(
+                                  isActive: _isActive,
+                                  plate: status?.plate ??
+                                      rental?.plate ??
+                                      emotorFallback,
+                                  battery: status?.batteryPercent ??
+                                      rental?.batteryPercent ??
+                                      batteryFallback,
+                                ),
+                                const SizedBox(height: 10),
+                                _GridCards(
+                                  status: status,
+                                  rental: rental,
+                                  isActive: _isActive,
+                                  dimmed: dimmed,
+                                  isBusy: _isToggling,
+                                  isEnding: _isEnding,
+                                  elapsedSeconds: _elapsedSeconds,
+                                  hasRental: _hasRental,
+                                  onToggle: _handleToggle,
+                                  onEnd: _handleEndRental,
+                                ),
+                                const SizedBox(height: 10),
+                                _LockSlider(
+                                  isActive: _isActive,
+                                  disabled: _isToggling,
+                                  onToggle: _handleToggle,
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
@@ -206,6 +223,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
+          if (_requireStart)
+            Positioned.fill(
+              bottom: 92,
+              child: _StartRideOverlay(
+                isLoading: _isStartingRide,
+                onStart: _handleStartRide,
+              ),
+            ),
         ],
       ),
     );
@@ -239,10 +264,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       });
       if (!ok) {
-        _showSnack('Perintah ACC gagal diproses.');
+        _showSnack(AppLocalizations.of(context).accFailed);
       }
     } catch (e) {
-      _showSnack('Gagal mengirim perintah: $e');
+      _showSnack('${AppLocalizations.of(context).sendFailed}$e');
     } finally {
       if (mounted) {
         setState(() => _isToggling = false);
@@ -276,10 +301,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _handleStartRide() async {
+    if (_isStartingRide) return;
+    setState(() => _isStartingRide = true);
+    try {
+      final rental = await _rentalService.startRental();
+      if (!mounted) return;
+      setState(() {
+        _rental = rental;
+        _hasRental = (rental.rideHistoryId ?? '').isNotEmpty || rental.id.isNotEmpty;
+        _elapsedSeconds = 0;
+        _requireStart = false;
+      });
+      _ensureTimer();
+      _startStatusListener();
+    } catch (e) {
+      _showSnack('${AppLocalizations.of(context).startRideFailed}$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingRide = false);
+      }
+    }
+  }
+
   Future<void> _handleEndRental() async {
     if (_isEnding) return;
     if (_isActive) {
-      _showSnack('Matikan e-motor terlebih dahulu sebelum end rental.');
+      _showSnack(AppLocalizations.of(context).turnOffBeforeEnd);
       return;
     }
     setState(() => _isEnding = true);
@@ -299,7 +347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         durationAndCost: entry.durationAndCost,
         distanceKm: entry.distanceKm,
         plate: entry.plate,
-        calories: entry.calories,
+        rentalDuration: entry.rentalDuration,
         emission: entry.emission,
         startTime: entry.startTime,
         endTime: entry.endTime,
@@ -309,11 +357,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         idleCost: entry.idleCost,
         totalCost: entry.totalCost,
       );
-      Navigator.of(context).pushReplacement(
-        appRoute(DetailHistoryScreen(item: item, returnToLogin: true)),
+      setState(() {
+        _rental = null;
+        _status = null;
+        _hasRental = false;
+        _requireStart = true;
+        _elapsedSeconds = 0;
+      });
+      Navigator.of(context).push(
+        appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
       );
     } catch (e) {
-      _showSnack('End rental gagal: $e');
+      _showSnack('${AppLocalizations.of(context).endRentalFailed}$e');
     } finally {
       if (mounted) {
         setState(() => _isEnding = false);
@@ -335,6 +390,97 @@ class _Background extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: [Color(0xFFEFF4FF), Colors.white],
             stops: [0.0, 0.35],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StartRideOverlay extends StatelessWidget {
+  const _StartRideOverlay({
+    required this.isLoading,
+    required this.onStart,
+  });
+
+  final bool isLoading;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white.withValues(alpha: 0.7),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 18,
+                offset: Offset(0, 10),
+              ),
+            ],
+            border: Border.all(color: const Color(0xFFE7EBF3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppLocalizations.of(context).startRideTitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.of(context).startRideBody,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: isLoading ? null : onStart,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C7BFE),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          AppLocalizations.of(context).startRideButton,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -399,8 +545,9 @@ class _PlateBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = !isActive;
+    final l10n = AppLocalizations.of(context);
     final batteryText =
-        battery != null ? 'Battery ${(battery!).toStringAsFixed(0)}%' : 'Locked';
+        battery != null ? '${l10n.battery} ${(battery!).toStringAsFixed(0)}%' : l10n.locked;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -461,7 +608,7 @@ class _PlateBadge extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              isActive ? 'ON' : 'OFF',
+              isActive ? l10n.statusOn : l10n.statusOff,
               style: GoogleFonts.poppins(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -503,10 +650,9 @@ class _GridCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final carbon = status?.carbonEmissions ?? 0;
-    final calories = status?.calories ?? 0;
-    final range = status?.rangeKm ?? rental?.rangeKm ?? 0;
     final rentalTime = status?.rentalMinutes ?? 0;
     final ping = status?.pingQuality ?? '---';
+    final l10n = AppLocalizations.of(context);
     final label = GoogleFonts.poppins(
       fontSize: 11,
       fontWeight: FontWeight.w600,
@@ -525,7 +671,7 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _InfoTile(
-                  label: 'Carbon Emission',
+                  label: l10n.carbonEmission,
                   value: carbon == 0 ? '--' : carbon.toStringAsFixed(2),
                   icon: Icons.eco_rounded,
                   labelStyle: label,
@@ -548,10 +694,12 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _RentalTimeTile(
-                  label: 'Rental Time',
+                  label: l10n.rentalTime,
                   value: hasRental
                       ? _formatDuration(elapsedSeconds)
-                      : (rentalTime == 0 ? '--' : '$rentalTime min'),
+                      : (rentalTime == 0
+                          ? '--'
+                          : '$rentalTime ${l10n.durationMinute}'),
                   icon: Icons.timer_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -562,7 +710,7 @@ class _GridCards extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _InfoTile(
-                  label: 'Ping',
+                  label: l10n.ping,
                   value: ping,
                   icon: Icons.wifi_tethering_rounded,
                   labelStyle: label,
@@ -580,7 +728,7 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _ActionTile(
-                  label: 'On',
+                  label: l10n.on,
                   icon: Icons.flash_on_rounded,
                   color: const Color(0xFF2C7BFE),
                   active: isActive,
@@ -591,7 +739,7 @@ class _GridCards extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _ActionTile(
-                  label: 'Off',
+                  label: l10n.off,
                   icon: Icons.power_settings_new_rounded,
                   color: const Color(0xFF2C7BFE),
                   active: !isActive,
@@ -775,7 +923,7 @@ class _RentalTimeTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  'Live',
+                  AppLocalizations.of(context).live,
                   style: GoogleFonts.poppins(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -909,7 +1057,9 @@ class _EndRentalTile extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isEnding ? 'Ending...' : 'End Rental',
+                  isEnding
+                      ? AppLocalizations.of(context).ending
+                      : AppLocalizations.of(context).endRental,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1035,7 +1185,9 @@ class _LockSliderState extends State<_LockSlider> {
                     Icon(statusIcon, size: 18, color: textColor),
                     const SizedBox(width: 6),
                     Text(
-                      widget.isActive ? 'Slide to Lock' : 'Slide to Unlock',
+                      widget.isActive
+                          ? AppLocalizations.of(context).slideToLock
+                          : AppLocalizations.of(context).slideToUnlock,
                       style: GoogleFonts.poppins(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,

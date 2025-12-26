@@ -6,79 +6,66 @@ import '../../profile/presentation/profile_screen.dart';
 import 'detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../core/navigation/app_route.dart';
+import '../data/history_service.dart';
+import '../data/history_models.dart';
+import '../../../core/localization/app_localizations.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  late Future<List<HistoryEntry>> _historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _historyFuture = HistoryService().fetchHistory();
+  }
+
+  List<HistoryItem> _mapItems(List<HistoryEntry> entries) {
+    return entries
+        .map(
+          (entry) => HistoryItem(
+            date: entry.date,
+            durationAndCost: entry.durationAndCost,
+            distanceKm: entry.distanceKm,
+            plate: entry.plate,
+            rentalDuration: entry.rentalDuration,
+            emission: entry.emission,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            startPlace: entry.startPlace,
+            endPlace: entry.endPlace,
+            rideCost: entry.rideCost,
+            idleCost: entry.idleCost,
+            totalCost: entry.totalCost,
+          ),
+        )
+        .toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const stats = [
+    final l10n = AppLocalizations.of(context);
+    final stats = [
       _StatItem(
-        label: 'Mileage',
+        label: l10n.statsMileage,
         value: '40,22 km',
         icon: Icons.route_rounded,
       ),
       _StatItem(
-        label: 'Active Days',
-        value: '20 Days',
+        label: l10n.statsActiveDays,
+        value: '20 ${l10n.days}',
         icon: Icons.local_fire_department_rounded,
       ),
       _StatItem(
-        label: 'Reduced Emission',
+        label: l10n.statsReducedEmission,
         value: '5,19',
         icon: Icons.eco_rounded,
-      ),
-    ];
-
-    const history = [
-      HistoryItem(
-        date: '6 June 2025',
-        durationAndCost: '30 Days - Rp 100.000',
-        distanceKm: '100 km',
-        plate: 'DR 1234 PW',
-        calories: '79.64 kcal',
-        emission: '0.23 g',
-        startTime: '16:05 PM',
-        endTime: '16:15 PM',
-        startPlace:
-            'C37V+Q4P, Jl. Unram, Gomong, Kec. Selaparang, Kota Mataram, Nusa Tenggara Barat, Indonesia',
-        endPlace:
-            'C37V+Q4P, Jl. Unram, Gomong, Kec. Selaparang, Kota Mataram, Nusa Tenggara Barat, Indonesia',
-        rideCost: 'Rp 4.600,00',
-        idleCost: 'Rp 2.000,00',
-        totalCost: 'Rp 6.600,00',
-      ),
-      HistoryItem(
-        date: '6 April 2025',
-        durationAndCost: '12 Days - Rp 50.000',
-        distanceKm: '221 km',
-        plate: 'DR 1211 XY',
-        calories: '60.20 kcal',
-        emission: '0.18 g',
-        startTime: '15:05 PM',
-        endTime: '15:20 PM',
-        startPlace:
-            'Jl. Catur Warga, Mataram, Nusa Tenggara Barat, Indonesia',
-        endPlace:
-            'Jl. Pelita, Mataram, Nusa Tenggara Barat, Indonesia',
-        rideCost: 'Rp 3.800,00',
-        idleCost: 'Rp 1.500,00',
-        totalCost: 'Rp 5.300,00',
-      ),
-      HistoryItem(
-        date: '20 January 2025',
-        durationAndCost: '12 Days - Rp 50.000',
-        distanceKm: '100 km',
-        plate: 'DR 3211 AB',
-        calories: '45.10 kcal',
-        emission: '0.12 g',
-        startTime: '10:15 AM',
-        endTime: '10:28 AM',
-        startPlace: 'Jl. Pejanggik, Mataram, Nusa Tenggara Barat',
-        endPlace: 'Jl. Langko, Mataram, Nusa Tenggara Barat',
-        rideCost: 'Rp 3.200,00',
-        idleCost: 'Rp 1.200,00',
-        totalCost: 'Rp 4.400,00',
       ),
     ];
 
@@ -89,11 +76,11 @@ class HistoryScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 12),
-            Text(
-              'My History',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+                Text(
+                  l10n.myHistory,
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                 color: Colors.black,
               ),
             ),
@@ -104,19 +91,52 @@ class HistoryScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView.separated(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                itemBuilder: (context, index) => _HistoryCard(
-                  item: history[index],
-                  onTap: () {
-                    Navigator.of(context).push(
-                      appRoute(DetailHistoryScreen(item: history[index])),
+              child: FutureBuilder<List<HistoryEntry>>(
+                future: _historyFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        l10n.historyLoadFailed,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                     );
-                  },
-                ),
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemCount: history.length,
+                  }
+                  final items = _mapItems(snapshot.data ?? []);
+                  if (items.isEmpty) {
+                    return Center(
+                      child: Text(
+                        l10n.historyEmpty,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    itemBuilder: (context, index) => _HistoryCard(
+                      item: items[index],
+                      onTap: () {
+                        Navigator.of(context).push(
+                          appRoute(DetailHistoryScreen(item: items[index])),
+                        );
+                      },
+                    ),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemCount: items.length,
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),
@@ -234,7 +254,7 @@ class HistoryItem {
     required this.durationAndCost,
     required this.distanceKm,
     required this.plate,
-    required this.calories,
+    required this.rentalDuration,
     required this.emission,
     required this.startTime,
     required this.endTime,
@@ -249,7 +269,7 @@ class HistoryItem {
   final String durationAndCost;
   final String distanceKm;
   final String plate;
-  final String calories;
+  final String rentalDuration;
   final String emission;
   final String startTime;
   final String endTime;

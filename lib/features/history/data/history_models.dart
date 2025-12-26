@@ -1,3 +1,5 @@
+import '../../../core/localization/app_localizations.dart';
+
 class HistoryEntry {
   HistoryEntry({
     required this.id,
@@ -5,7 +7,7 @@ class HistoryEntry {
     required this.durationAndCost,
     required this.distanceKm,
     required this.plate,
-    required this.calories,
+    required this.rentalDuration,
     required this.emission,
     required this.startTime,
     required this.endTime,
@@ -54,7 +56,7 @@ class HistoryEntry {
 
     String formatDate(DateTime? dt) {
       if (dt == null) return '-';
-      const months = [
+      const monthsEn = [
         'Jan',
         'Feb',
         'Mar',
@@ -68,6 +70,24 @@ class HistoryEntry {
         'Nov',
         'Dec',
       ];
+      const monthsId = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
+      final months =
+          AppLocalizations.current.locale.languageCode == 'id'
+              ? monthsId
+              : monthsEn;
       final day = dt.day.toString().padLeft(2, '0');
       final month = months[dt.month - 1];
       return '$day $month ${dt.year}';
@@ -78,6 +98,20 @@ class HistoryEntry {
       final hour = dt.hour.toString().padLeft(2, '0');
       final minute = dt.minute.toString().padLeft(2, '0');
       return '$hour:$minute';
+    }
+
+    String formatDuration(DateTime? start, DateTime? end) {
+      if (start == null || end == null) return '-';
+      final diff = end.difference(start);
+      if (diff.isNegative) return '-';
+      final totalSeconds = diff.inSeconds;
+      final hours = totalSeconds ~/ 3600;
+      final minutes = (totalSeconds % 3600) ~/ 60;
+      final l10n = AppLocalizations.current;
+      if (hours > 0) {
+        return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')} ${l10n.durationHour}';
+      }
+      return '${minutes.toString().padLeft(2, '0')} ${l10n.durationMinute}';
     }
 
     final bike = asMap(json['bike']);
@@ -115,7 +149,7 @@ class HistoryEntry {
       durationAndCost: durationAndCost,
       distanceKm: formatDistance(json['total_distance_meters'] ?? json['distance_m']),
       plate: plate,
-      calories: formatNumber(json['calories'], ' kcal'),
+      rentalDuration: formatDuration(startAt, endAt),
       emission: formatNumber(json['carbon_emissions'], ' g'),
       startTime: formatTime(startAt),
       endTime: formatTime(endAt),
@@ -132,7 +166,7 @@ class HistoryEntry {
   final String durationAndCost;
   final String distanceKm;
   final String plate;
-  final String calories;
+  final String rentalDuration;
   final String emission;
   final String startTime;
   final String endTime;
