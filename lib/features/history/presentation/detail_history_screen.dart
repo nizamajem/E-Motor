@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'history_screen.dart';
+import '../../auth/presentation/login_screen.dart';
+import '../../../core/navigation/app_route.dart';
+import '../../../core/session/session_manager.dart';
 
 class DetailHistoryScreen extends StatelessWidget {
-  const DetailHistoryScreen({super.key, required this.item});
+  const DetailHistoryScreen({
+    super.key,
+    required this.item,
+    this.returnToLogin = false,
+  });
 
   final HistoryItem item;
+  final bool returnToLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +32,7 @@ class DetailHistoryScreen extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new_rounded,
                         size: 18, color: Colors.black87),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => _handleExit(context),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -46,10 +54,47 @@ class DetailHistoryScreen extends StatelessWidget {
                 accent: accent,
                 onPressed: () => _openFeedbackSheet(context, accent),
               ),
+              if (returnToLogin) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _handleExit(context),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: accent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Selesai',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _handleExit(BuildContext context) {
+    if (!returnToLogin) {
+      Navigator.of(context).pop();
+      return;
+    }
+    SessionManager.instance.clear();
+    Navigator.of(context).pushAndRemoveUntil(
+      appRoute(const LoginScreen()),
+      (route) => false,
     );
   }
 
@@ -256,8 +301,6 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _LineEntry('Nomor Kendaraan', item.plate, label, value),
-          const SizedBox(height: 8),
           _LineEntry('Jarak Tempuh', item.distanceKm, label, value),
           const SizedBox(height: 8),
           _LineEntry('Jumlah Kalori', item.calories, label, value),

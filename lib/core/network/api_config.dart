@@ -7,8 +7,13 @@ class ApiConfig {
   /// eMotor ID bound to the logged-in user. Set via --dart-define=EMOTOR_ID=...
   static const String emotorId = String.fromEnvironment('EMOTOR_ID', defaultValue: '');
 
+  /// Login session lifetime in seconds, sent as "detik".
+  static const int loginSessionSeconds =
+      int.fromEnvironment('LOGIN_SESSION_SECONDS', defaultValue: 3600);
+
   /// Paths grouped here to keep usage consistent across the app.
   static const String loginPath = '/auth/login-emotor';
+  static const String logoutPath = '/auth/logout';
   static const String emotorListPath = '/emotors';
   static const String emotorByIdPath = '/emotors/get-by-id';
   static const String startRentalPath = '/emotors/rides/start';

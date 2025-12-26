@@ -7,6 +7,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../components/logout_dialog.dart';
+import '../../../core/session/session_manager.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -525,6 +526,7 @@ Future<void> _showLogoutDialog(BuildContext context) {
     barrierDismissible: true,
     builder: (_) => LogoutDialog(
       onConfirm: () {
+        SessionManager.instance.clear();
         Navigator.of(context)
           ..pop()
           ..pushAndRemoveUntil(

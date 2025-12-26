@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/session/session_manager.dart';
+import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 
 class EMotorApp extends StatelessWidget {
@@ -8,11 +10,12 @@ class EMotorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasSession = SessionManager.instance.token != null;
     return MaterialApp(
       title: 'Gridwiz E-Motor',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const OnboardingScreen(),
+      home: hasSession ? const DashboardScreen() : const OnboardingScreen(),
     );
   }
 }

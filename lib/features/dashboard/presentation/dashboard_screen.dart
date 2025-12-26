@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../history/presentation/history_screen.dart';
+import '../../history/data/history_service.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../rental/data/rental_service.dart';
+import '../../history/presentation/detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
@@ -24,22 +26,30 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isActive = false;
   bool _isToggling = false;
+  bool _isEnding = false;
+  bool _hasRental = false;
+  int _elapsedSeconds = 0;
   RideStatus? _status;
   RentalSession? _rental;
   final RentalService _rentalService = RentalService();
   StreamSubscription<RideStatus>? _statusSub;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
+    _hasRental = (_rental?.rideHistoryId ?? '').isNotEmpty;
+    _elapsedSeconds = _hasRental ? 0 : 0;
+    _ensureTimer();
     _startStatusListener();
   }
 
   @override
   void dispose() {
     _statusSub?.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -50,8 +60,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!mounted) return;
         setState(() {
           _status = data;
-          _isActive = data.motorOn;
+          if (data.hasMotorState) {
+            _isActive = data.motorOn;
+          }
+          _hasRental = true;
+          if (data.rideSeconds > 0) {
+            _elapsedSeconds = data.rideSeconds;
+          }
         });
+        if (_hasRental) {
+          _ensureTimer();
+        }
       },
       onError: (_) {},
     );
@@ -63,6 +82,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final rental = _rental;
     final status = _status;
     final riderName = SessionManager.instance.user?.name ?? 'Rider';
+    final emotorFromProfile = SessionManager.instance.emotorProfile;
+    final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
+    final emotorPlate = emotorFromProfile?['vehicle_number']?.toString().trim() ??
+        emotorFromProfile?['vehicleNumber']?.toString().trim() ??
+        (emotorFromUser is Map<String, dynamic>
+            ? (emotorFromUser['vehicle_number']?.toString().trim() ??
+                emotorFromUser['vehicleNumber']?.toString().trim())
+            : null);
+    final emotorName = emotorFromProfile?['modelBikeId_model']?.toString().trim() ??
+        (emotorFromUser is Map<String, dynamic>
+            ? emotorFromUser['modelBikeId_model']?.toString().trim()
+            : null);
+    final emotorBattery = emotorFromProfile?['power']?.toString().trim() ??
+        (emotorFromUser is Map<String, dynamic>
+            ? emotorFromUser['power']?.toString().trim()
+            : null);
+    final emotorFallback = (emotorPlate != null && emotorPlate.isNotEmpty)
+        ? emotorPlate
+        : (emotorName != null && emotorName.isNotEmpty)
+            ? emotorName
+            : 'N/A';
+    final batteryFallback = double.tryParse(emotorBattery ?? '');
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -115,8 +156,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(height: 8),
                         _PlateBadge(
                           isActive: _isActive,
-                          plate: rental?.plate ?? 'N/A',
-                          battery: status?.batteryPercent ?? rental?.batteryPercent,
+                          plate: status?.plate ?? rental?.plate ?? emotorFallback,
+                          battery: status?.batteryPercent ??
+                              rental?.batteryPercent ??
+                              batteryFallback,
                         ),
                         const SizedBox(height: 10),
                         _GridCards(
@@ -125,7 +168,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           isActive: _isActive,
                           dimmed: dimmed,
                           isBusy: _isToggling,
+                          isEnding: _isEnding,
+                          elapsedSeconds: _elapsedSeconds,
+                          hasRental: _hasRental,
                           onToggle: _handleToggle,
+                          onEnd: _handleEndRental,
                         ),
                         const SizedBox(height: 10),
                         _LockSlider(
@@ -133,6 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           disabled: _isToggling,
                           onToggle: _handleToggle,
                         ),
+                        const SizedBox(height: 10),
                         const SizedBox(height: 12),
                       ],
                     ),
@@ -167,12 +215,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_isToggling) return;
     setState(() => _isToggling = true);
     try {
-      final status = await _rentalService.toggleMotor(value);
+      final ok = await _rentalService.toggleMotor(value);
       if (!mounted) return;
       setState(() {
-        _status = status;
-        _isActive = status.motorOn;
+        if (ok) {
+          _isActive = value;
+          final current = _status;
+          if (current != null) {
+            _status = RideStatus(
+              motorOn: value,
+              rangeKm: current.rangeKm,
+              pingQuality: current.pingQuality,
+              rentalMinutes: current.rentalMinutes,
+              carbonReduction: current.carbonReduction,
+              rideSeconds: current.rideSeconds,
+              carbonEmissions: current.carbonEmissions,
+              calories: current.calories,
+              hasMotorState: true,
+              plate: current.plate,
+              batteryPercent: current.batteryPercent,
+            );
+          }
+        }
       });
+      if (!ok) {
+        _showSnack('Perintah ACC gagal diproses.');
+      }
     } catch (e) {
       _showSnack('Gagal mengirim perintah: $e');
     } finally {
@@ -186,6 +254,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  void _ensureTimer() {
+    if (_timer != null || !_hasRental) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _elapsedSeconds += 1;
+      });
+    });
+  }
+
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _handleEndRental() async {
+    if (_isEnding) return;
+    if (_isActive) {
+      _showSnack('Matikan e-motor terlebih dahulu sebelum end rental.');
+      return;
+    }
+    setState(() => _isEnding = true);
+    try {
+      final endedRideId = await _rentalService.endRental();
+      _statusSub?.cancel();
+      _timer?.cancel();
+      final history = await HistoryService().fetchHistoryById(endedRideId);
+      if (!mounted) return;
+      if (history.isEmpty) {
+        _showSnack('Detail history tidak ditemukan.');
+        return;
+      }
+      final entry = history.first;
+      final item = HistoryItem(
+        date: entry.date,
+        durationAndCost: entry.durationAndCost,
+        distanceKm: entry.distanceKm,
+        plate: entry.plate,
+        calories: entry.calories,
+        emission: entry.emission,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        startPlace: entry.startPlace,
+        endPlace: entry.endPlace,
+        rideCost: entry.rideCost,
+        idleCost: entry.idleCost,
+        totalCost: entry.totalCost,
+      );
+      Navigator.of(context).pushReplacement(
+        appRoute(DetailHistoryScreen(item: item, returnToLogin: true)),
+      );
+    } catch (e) {
+      _showSnack('End rental gagal: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isEnding = false);
+      }
+    }
   }
 }
 
@@ -328,7 +461,7 @@ class _PlateBadge extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              isActive ? 'Active' : 'Locked',
+              isActive ? 'ON' : 'OFF',
               style: GoogleFonts.poppins(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -348,6 +481,10 @@ class _GridCards extends StatelessWidget {
     required this.dimmed,
     required this.onToggle,
     required this.isBusy,
+    required this.isEnding,
+    required this.elapsedSeconds,
+    required this.hasRental,
+    required this.onEnd,
     this.status,
     this.rental,
   });
@@ -355,13 +492,18 @@ class _GridCards extends StatelessWidget {
   final bool isActive;
   final bool dimmed;
   final bool isBusy;
+  final bool isEnding;
+  final int elapsedSeconds;
+  final bool hasRental;
   final ValueChanged<bool> onToggle;
+  final VoidCallback onEnd;
   final RideStatus? status;
   final RentalSession? rental;
 
   @override
   Widget build(BuildContext context) {
-    final carbon = status?.carbonReduction ?? 0;
+    final carbon = status?.carbonEmissions ?? 0;
+    final calories = status?.calories ?? 0;
     final range = status?.rangeKm ?? rental?.rangeKm ?? 0;
     final rentalTime = status?.rentalMinutes ?? 0;
     final ping = status?.pingQuality ?? '---';
@@ -383,11 +525,37 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _InfoTile(
-                  label: 'Carbon Reduction',
+                  label: 'Carbon Emission',
                   value: carbon == 0 ? '--' : carbon.toStringAsFixed(2),
                   icon: Icons.eco_rounded,
                   labelStyle: label,
                   valueStyle: value,
+                  dimmed: dimmed,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _EndRentalTile(
+                  isEnding: isEnding,
+                  disabled: isBusy,
+                  onPressed: onEnd,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _RentalTimeTile(
+                  label: 'Rental Time',
+                  value: hasRental
+                      ? _formatDuration(elapsedSeconds)
+                      : (rentalTime == 0 ? '--' : '$rentalTime min'),
+                  icon: Icons.timer_rounded,
+                  labelStyle: label,
+                  valueStyle: value,
+                  active: hasRental,
                   dimmed: dimmed,
                 ),
               ),
@@ -403,32 +571,6 @@ class _GridCards extends StatelessWidget {
                   outlined: true,
                   dimmed: false, // Ping stays vivid
                   onTap: () {},
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _InfoTile(
-                  label: 'Range',
-                  value: range == 0 ? '--' : '${range.toStringAsFixed(0)} km',
-                  icon: Icons.location_on_rounded,
-                  labelStyle: label,
-                  valueStyle: value,
-                  dimmed: dimmed,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _InfoTile(
-                  label: 'Rental Time',
-                  value: rentalTime == 0 ? '--' : '$rentalTime min',
-                  icon: Icons.timer_rounded,
-                  labelStyle: label,
-                  valueStyle: value,
-                  dimmed: dimmed,
                 ),
               ),
             ],
@@ -462,6 +604,16 @@ class _GridCards extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 }
 
@@ -545,6 +697,101 @@ class _InfoTile extends StatelessWidget {
   }
 }
 
+class _RentalTimeTile extends StatelessWidget {
+  const _RentalTimeTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.labelStyle,
+    required this.valueStyle,
+    required this.active,
+    required this.dimmed,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final TextStyle labelStyle;
+  final TextStyle valueStyle;
+  final bool active;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    const baseColor = Color(0xFF2C7BFE);
+    final fg = active ? Colors.white : baseColor;
+    final bg = active
+        ? const LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              Color(0xFF1E6DFF),
+              Color(0xFF3F8CFF),
+            ],
+          )
+        : const LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              Color(0xFFE5ECF7),
+              Color(0xFFF4F7FB),
+            ],
+          );
+    return Opacity(
+      opacity: dimmed ? 0.55 : 1,
+      child: Container(
+        height: 68,
+        decoration: BoxDecoration(
+          gradient: bg,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x142C7BFE),
+              blurRadius: 10,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: fg, size: 20),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: labelStyle.copyWith(color: fg)),
+                if (value.isNotEmpty)
+                  Text(value, style: valueStyle.copyWith(color: fg)),
+              ],
+            ),
+            const Spacer(),
+            if (active)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Live',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            if (!active)
+              Icon(Icons.timer_outlined, color: baseColor, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
     required this.label,
@@ -622,6 +869,71 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
+class _EndRentalTile extends StatelessWidget {
+  const _EndRentalTile({
+    required this.isEnding,
+    required this.disabled,
+    required this.onPressed,
+  });
+
+  final bool isEnding;
+  final bool disabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    const baseColor = Color(0xFFFFA45B);
+    final isDisabled = disabled || isEnding;
+    return Opacity(
+      opacity: isDisabled ? 0.7 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: isDisabled ? null : onPressed,
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: baseColor,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1AFFA45B),
+                blurRadius: 10,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isEnding ? 'Ending...' : 'End Rental',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              if (isEnding)
+                const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LockSlider extends StatefulWidget {
   const _LockSlider({
     required this.isActive,
@@ -639,6 +951,12 @@ class _LockSlider extends StatefulWidget {
 
 class _LockSliderState extends State<_LockSlider> {
   double _position = -1.0; // -1 to 1
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.isActive ? 1.0 : -1.0;
+  }
 
   @override
   void didUpdateWidget(covariant _LockSlider oldWidget) {

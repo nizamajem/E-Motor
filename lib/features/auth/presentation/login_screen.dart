@@ -19,6 +19,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _isLoading = false;
+  bool _isFlowLoading = false;
   final _usernameController = TextEditingController(text: 'demo');
   final _passwordController = TextEditingController();
   final RentalService _rentalService = RentalService();
@@ -157,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
+                            onPressed: (_isLoading || _isFlowLoading) ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF2C7BFE),
                               foregroundColor: Colors.white,
@@ -182,6 +183,38 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   )
                                 : const Text('Sign In'),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: (_isLoading || _isFlowLoading)
+                                ? null
+                                : _handleRunFullFlow,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF2C7BFE),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 13, horizontal: 16),
+                              side: const BorderSide(color: Color(0xFF2C7BFE)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              textStyle: GoogleFonts.poppins(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            child: _isFlowLoading
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      valueColor: AlwaysStoppedAnimation(Color(0xFF2C7BFE)),
+                                    ),
+                                  )
+                                : const Text('Run Full Flow'),
                           ),
                         ),
                       ],
@@ -250,7 +283,12 @@ class _LoginScreenState extends State<LoginScreen> {
           } else if (e.statusCode == 400 &&
               message.contains('bound') &&
               message.contains('user')) {
-            _showSnack('E-motor sudah terikat ke user lain. Membuka dashboard saja.');
+            await _ensureEmotorId(forceRefresh: true);
+            try {
+              rental = await _rentalService.startRental();
+            } on ApiException {
+              _showSnack('E-motor sudah terikat ke user lain. Membuka dashboard saja.');
+            }
           } else {
             rethrow;
           }
@@ -269,19 +307,52 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _ensureEmotorId() async {
-    if ((SessionManager.instance.emotorId ?? '').isNotEmpty) {
+  Future<void> _handleRunFullFlow() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+    if (username.isEmpty || password.isEmpty) {
+      _showSnack('Username dan password harus diisi');
       return;
     }
-    if (ApiConfig.emotorId.isNotEmpty) {
-      SessionManager.instance.saveEmotorId(ApiConfig.emotorId);
+    setState(() {
+      _isFlowLoading = true;
+    });
+    try {
+      await _rentalService.runFullFlow(
+        username: username,
+        password: password,
+        stepDelay: const Duration(milliseconds: 800),
+      );
+      if (!mounted) return;
+      _showSnack('Flow selesai.');
+    } catch (e) {
+      _showSnack('Flow gagal: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFlowLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _ensureEmotorId({bool forceRefresh = false}) async {
+    if (!forceRefresh && (SessionManager.instance.emotorId ?? '').isNotEmpty) {
       return;
+    }
+    if (!forceRefresh && ApiConfig.emotorId.isNotEmpty) {
+      await SessionManager.instance.saveEmotorId(ApiConfig.emotorId);
+      return;
+    }
+    if (forceRefresh) {
+      await SessionManager.instance.saveEmotorId('');
+      await SessionManager.instance.saveEmotorImei('');
     }
     final userId = SessionManager.instance.user?.userId;
     if (userId == null || userId.isEmpty) return;
     final emotor = await _emotorService.fetchAssignedToUser(userId);
     if (emotor != null) {
-      SessionManager.instance.saveEmotorId(emotor.id);
+      await SessionManager.instance.saveEmotorId(emotor.id);
     } else {
       _showSnack('Tidak menemukan e-motor yang terikat ke akun ini.');
     }
