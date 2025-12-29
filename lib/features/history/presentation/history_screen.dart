@@ -30,6 +30,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return entries
         .map(
           (entry) => HistoryItem(
+            id: entry.id,
             date: entry.date,
             durationAndCost: entry.durationAndCost,
             distanceKm: entry.distanceKm,
@@ -51,24 +52,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final stats = [
-      _StatItem(
-        label: l10n.statsMileage,
-        value: '40,22 km',
-        icon: Icons.route_rounded,
-      ),
-      _StatItem(
-        label: l10n.statsActiveDays,
-        value: '20 ${l10n.days}',
-        icon: Icons.local_fire_department_rounded,
-      ),
-      _StatItem(
-        label: l10n.statsReducedEmission,
-        value: '5,19',
-        icon: Icons.eco_rounded,
-      ),
-    ];
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -85,15 +68,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _StatsRow(items: stats),
-            ),
-            const SizedBox(height: 16),
             Expanded(
               child: FutureBuilder<List<HistoryEntry>>(
                 future: _historyFuture,
                 builder: (context, snapshot) {
+                  final items = _mapItems(snapshot.data ?? []);
+                  final stats = _buildStats(snapshot.data ?? [], l10n);
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _StatsRow(items: stats),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -109,7 +99,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     );
                   }
-                  final items = _mapItems(snapshot.data ?? []);
                   if (items.isEmpty) {
                     return Center(
                       child: Text(
@@ -135,6 +124,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemCount: items.length,
+                  );
+                          },
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -163,6 +157,50 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
     );
+  }
+
+  List<_StatItem> _buildStats(
+    List<HistoryEntry> entries,
+    AppLocalizations l10n,
+  ) {
+    double totalKm = 0;
+    double totalEmission = 0;
+    final days = <String>{};
+    for (final entry in entries) {
+      totalKm += entry.distanceKmValue;
+      totalEmission += entry.carbonEmissionsValue;
+      final dt = entry.startDate;
+      if (dt != null) {
+        days.add('${dt.year}-${dt.month}-${dt.day}');
+      } else if (entry.date.isNotEmpty) {
+        days.add(entry.date);
+      }
+    }
+    return [
+      _StatItem(
+        label: l10n.statsMileage,
+        value: '${totalKm.toStringAsFixed(2)} km',
+        icon: Icons.route_rounded,
+      ),
+      _StatItem(
+        label: l10n.statsActiveDays,
+        value: '${days.length} ${l10n.days}',
+        icon: Icons.local_fire_department_rounded,
+      ),
+      _StatItem(
+        label: l10n.statsReducedEmission,
+        value: _formatEmission(totalEmission),
+        icon: Icons.eco_rounded,
+      ),
+    ];
+  }
+
+  String _formatEmission(double value) {
+    if (value >= 1000) {
+      final kg = value / 1000;
+      return '${kg.toStringAsFixed(2)} kg';
+    }
+    return '${value.toStringAsFixed(2)} g';
   }
 }
 
@@ -228,6 +266,7 @@ class _StatTile extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           item.label,
+          textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             fontSize: 11.5,
             fontWeight: FontWeight.w500,
@@ -250,6 +289,7 @@ class _StatItem {
 
 class HistoryItem {
   const HistoryItem({
+    required this.id,
     required this.date,
     required this.durationAndCost,
     required this.distanceKm,
@@ -265,6 +305,7 @@ class HistoryItem {
     required this.totalCost,
   });
 
+  final String id;
   final String date;
   final String durationAndCost;
   final String distanceKm;

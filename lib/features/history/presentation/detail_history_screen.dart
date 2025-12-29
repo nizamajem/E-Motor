@@ -6,6 +6,8 @@ import '../../auth/presentation/login_screen.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../data/feedback_service.dart';
+import '../../../core/network/api_client.dart';
 
 class DetailHistoryScreen extends StatelessWidget {
   const DetailHistoryScreen({
@@ -105,6 +107,7 @@ class DetailHistoryScreen extends StatelessWidget {
   Future<void> _openFeedbackSheet(BuildContext context, Color accent) {
     final controller = TextEditingController();
     int rating = 4;
+    bool isSending = false;
     final l10n = AppLocalizations.of(context);
     return showModalBottomSheet(
       context: context,
@@ -214,7 +217,7 @@ class DetailHistoryScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
+                            onPressed: isSending ? null : () => Navigator.of(ctx).pop(),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 11),
                               side: const BorderSide(color: Color(0xFFE2E7F0)),
@@ -234,11 +237,168 @@ class DetailHistoryScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              // TODO: send feedback to system.
-                              Navigator.of(ctx).pop();
-                            },
+                      child: ElevatedButton(
+                            onPressed: isSending
+                                ? null
+                                : () async {
+                                    final text = controller.text.trim();
+                                    if (text.isEmpty) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(content: Text(l10n.feedbackInput)),
+                                      );
+                                      return;
+                                    }
+                                    if (rating < 1 || rating > 5) {
+                                      return;
+                                    }
+                                    FocusScope.of(ctx).unfocus();
+                                    setState(() => isSending = true);
+                                    try {
+                                      final session = SessionManager.instance;
+                                      final profile = session.userProfile;
+                                      final userId =
+                                          session.user?.userId ??
+                                          profile?['id']?.toString();
+                                      final tenantId =
+                                          profile?['tenantId']?.toString() ??
+                                          profile?['tenant_id']?.toString();
+                                      await FeedbackService().createFeedback(
+                                        userId: userId,
+                                        tenantId: tenantId,
+                                        userCyclingHistoryId: item.id,
+                                        rating: rating,
+                                        feedback: text,
+                                      );
+                                      if (context.mounted) {
+                                        Navigator.of(ctx).pop();
+                                      }
+                                      if (context.mounted) {
+                                        showDialog<void>(
+                                          context: context,
+                                          builder: (dialogContext) {
+                                            final dialogL10n =
+                                                AppLocalizations.of(dialogContext);
+                                            return Dialog(
+                                              insetPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 22),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(18),
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.fromLTRB(
+                                                    18, 18, 18, 16),
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Container(
+                                                      height: 56,
+                                                      width: 56,
+                                                      decoration: BoxDecoration(
+                                                        shape: BoxShape.circle,
+                                                        color: const Color(
+                                                            0xFF2C7BFE),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            color:
+                                                                Color(0x332C7BFE),
+                                                            blurRadius: 14,
+                                                            offset: Offset(0, 6),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.check_rounded,
+                                                        color: Colors.white,
+                                                        size: 30,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    Text(
+                                                      dialogL10n
+                                                          .feedbackSuccessTitle,
+                                                      textAlign: TextAlign.center,
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      dialogL10n
+                                                          .feedbackSuccessBody,
+                                                      textAlign: TextAlign.center,
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 12.5,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color:
+                                                            Colors.grey.shade600,
+                                                        height: 1.4,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 14),
+                                                    SizedBox(
+                                                      width: double.infinity,
+                                                      child: ElevatedButton(
+                                                        onPressed: () =>
+                                                            Navigator.of(
+                                                                    dialogContext)
+                                                                .pop(),
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                      vertical: 11),
+                                                          backgroundColor:
+                                                              const Color(
+                                                                  0xFF2C7BFE),
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(12),
+                                                          ),
+                                                          elevation: 0,
+                                                        ),
+                                                        child: Text(
+                                                          dialogL10n
+                                                              .feedbackSuccessCta,
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: Colors.white,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      }
+                                    } on ApiException catch (e) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(content: Text(e.message)),
+                                      );
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(content: Text(e.toString())),
+                                      );
+                                    } finally {
+                                      if (context.mounted) {
+                                        setState(() => isSending = false);
+                                      }
+                                    }
+                                  },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 11),
                               backgroundColor: accent,
@@ -247,14 +407,23 @@ class DetailHistoryScreen extends StatelessWidget {
                               ),
                               elevation: 0,
                             ),
-                            child: Text(
-                              l10n.send,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
+                            child: isSending
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    l10n.send,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],

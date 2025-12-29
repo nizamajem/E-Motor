@@ -19,5 +19,8 @@ class ApiConfig {
   static const String startRentalPath = '/emotors/rides/start';
   static const String endRentalPath = '/emotors/rides/end';
   static const String accCommandPath = '/emotors/command/acc';
+  static const String findCommandPath = '/emotors/command/find';
   static const String historyByIdPath = '/user-cycling-history/get-by-id';
+  static const String historyByUserPath = '/user-cycling-history/all-e-motors/by-user';
+  static const String feedbacksPath = '/feedbacks';
 }

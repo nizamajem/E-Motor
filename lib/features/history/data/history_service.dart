@@ -10,9 +10,11 @@ class HistoryService {
 
   Future<List<HistoryEntry>> fetchHistory() async {
     if (SessionManager.instance.token == null) return [];
-    final rideId = SessionManager.instance.rental?.rideHistoryId;
-    if (rideId == null || rideId.isEmpty) return [];
-    return fetchHistoryById(rideId);
+    final userId = SessionManager.instance.user?.userId ??
+        SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+        SessionManager.instance.userProfile?['id']?.toString().trim();
+    if (userId == null || userId.isEmpty) return [];
+    return fetchHistoryByUser(userId);
   }
 
   Future<List<HistoryEntry>> fetchHistoryById(String rideId) async {
@@ -30,6 +32,25 @@ class HistoryService {
           .toList();
     }
     return [HistoryEntry.fromJson(data as Map<String, dynamic>)];
+  }
+
+  Future<List<HistoryEntry>> fetchHistoryByUser(String userId) async {
+    if (SessionManager.instance.token == null) return [];
+    if (userId.isEmpty) return [];
+    final res = await _client.getJson(
+      '${ApiConfig.historyByUserPath}/$userId',
+      auth: true,
+    );
+    final data = res['data'] ?? res;
+    if (data is List) {
+      return data
+          .map((e) => HistoryEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    if (data is Map<String, dynamic>) {
+      return [HistoryEntry.fromJson(data)];
+    }
+    return [];
   }
 
   Stream<List<HistoryEntry>> streamHistory(

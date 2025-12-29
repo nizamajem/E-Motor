@@ -60,6 +60,13 @@ class AppLocalizations {
       'start_ride_failed': 'Start ride failed: ',
       'acc_failed': 'ACC command failed.',
       'send_failed': 'Failed to send command: ',
+      'find_emotor': 'Find',
+      'find_emotor_success': 'Find command sent.',
+      'find_emotor_failed': 'Find command failed.',
+      'find_emotor_title': 'Find me',
+      'find_emotor_body':
+          'Your e-motor is pinging now. Follow the sound or indicator to locate it.',
+      'find_emotor_cta': 'Got it',
       'start_ride_title': 'Start Ride?',
       'start_ride_body': 'Start a ride to use the dashboard.',
       'start_ride_button': 'Start Ride',
@@ -89,6 +96,10 @@ class AppLocalizations {
       'give_feedback': 'Give Feedback',
       'feedback_hint': 'Help us improve your ride experience.',
       'feedback_input': 'Write your feedback',
+      'feedback_success_title': 'Thanks for the feedback!',
+      'feedback_success_body':
+          'Your feedback is in. It helps us make every ride better.',
+      'feedback_success_cta': 'Got it',
       'cancel': 'Cancel',
       'send': 'Send',
       'done': 'Done',
@@ -155,6 +166,13 @@ class AppLocalizations {
       'start_ride_failed': 'Start ride gagal: ',
       'acc_failed': 'Perintah ACC gagal diproses.',
       'send_failed': 'Gagal mengirim perintah: ',
+      'find_emotor': 'Cari',
+      'find_emotor_success': 'Perintah find berhasil dikirim.',
+      'find_emotor_failed': 'Perintah find gagal.',
+      'find_emotor_title': 'Temukan aku',
+      'find_emotor_body':
+          'E-motor sedang berbunyi. Ikuti bunyi atau indikator untuk menemukannya.',
+      'find_emotor_cta': 'Mengerti',
       'start_ride_title': 'Mulai Ride?',
       'start_ride_body': 'Untuk menggunakan dashboard, mulai ride dulu.',
       'start_ride_button': 'Mulai Ride',
@@ -184,6 +202,10 @@ class AppLocalizations {
       'give_feedback': 'Beri Umpan Balik',
       'feedback_hint': 'Bantu kami meningkatkan pengalaman berkendara Anda.',
       'feedback_input': 'Tulis feedback Anda',
+      'feedback_success_title': 'Terima kasih!',
+      'feedback_success_body':
+          'Feedback kamu sudah kami terima. Ini membantu kami membuat perjalanan makin nyaman.',
+      'feedback_success_cta': 'Sip, mengerti',
       'cancel': 'Batal',
       'send': 'Kirim',
       'done': 'Selesai',
@@ -250,6 +272,12 @@ class AppLocalizations {
   String get startRideFailed => _t('start_ride_failed');
   String get accFailed => _t('acc_failed');
   String get sendFailed => _t('send_failed');
+  String get findEmotor => _t('find_emotor');
+  String get findEmotorSuccess => _t('find_emotor_success');
+  String get findEmotorFailed => _t('find_emotor_failed');
+  String get findEmotorTitle => _t('find_emotor_title');
+  String get findEmotorBody => _t('find_emotor_body');
+  String get findEmotorCta => _t('find_emotor_cta');
   String get startRideTitle => _t('start_ride_title');
   String get startRideBody => _t('start_ride_body');
   String get startRideButton => _t('start_ride_button');
@@ -279,6 +307,9 @@ class AppLocalizations {
   String get giveFeedback => _t('give_feedback');
   String get feedbackHint => _t('feedback_hint');
   String get feedbackInput => _t('feedback_input');
+  String get feedbackSuccessTitle => _t('feedback_success_title');
+  String get feedbackSuccessBody => _t('feedback_success_body');
+  String get feedbackSuccessCta => _t('feedback_success_cta');
   String get cancel => _t('cancel');
   String get send => _t('send');
   String get done => _t('done');

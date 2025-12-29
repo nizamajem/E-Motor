@@ -134,18 +134,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                       border: Border.all(color: const Color(0xFFE8EDF4)),
                     ),
-                    child: Column(
-                      children: [
-                        for (int i = 0; i < entries.length; i++) ...[
-                          _ProfileRow(
-                            entry: entries[i],
-                            onTap: () => _handleTap(context, entries[i]),
-                          ),
-                          if (i != entries.length - 1)
-                            const Divider(
-                                height: 1, color: Color(0xFFE7EBF3)),
-                        ],
-                      ],
+                    child: ListView.separated(
+                      itemCount: entries.length,
+                      padding: EdgeInsets.zero,
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        return _ProfileRow(
+                          entry: entry,
+                          onTap: () => _handleTap(context, entry),
+                        );
+                      },
+                      separatorBuilder: (context, index) {
+                        return const Divider(
+                          height: 1,
+                          color: Color(0xFFE7EBF3),
+                        );
+                      },
                     ),
                   ),
                 ),

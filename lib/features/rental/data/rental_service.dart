@@ -339,6 +339,39 @@ class RentalService {
     return false;
   }
 
+  Future<bool> findEmotor() async {
+    final emotorIdFromProfile =
+        SessionManager.instance.emotorProfile?['id']?.toString().trim();
+    final emotorIdFromUser =
+        (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
+            ? (SessionManager.instance.userProfile?['emotor']
+                as Map<String, dynamic>)['id']
+                ?.toString()
+                .trim()
+            : null;
+    final emotorId = SessionManager.instance.rental?.emotorId ??
+        SessionManager.instance.emotorId ??
+        (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
+            ? emotorIdFromProfile
+            : null) ??
+        (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty
+            ? emotorIdFromUser
+            : null) ??
+        ApiConfig.emotorId;
+    if (emotorId.isEmpty) {
+      throw ApiException('Tidak ada emotorId untuk perintah find.');
+    }
+    final res = await _client.postJson(
+      ApiConfig.findCommandPath,
+      auth: true,
+      body: {'ids': [emotorId]},
+    );
+    if (res['ok'] == true) return true;
+    final matched = res['matched'];
+    if (matched is num && matched > 0) return true;
+    return false;
+  }
+
   Future<RideStatus> fetchStatus() async {
     final rideId = SessionManager.instance.rental?.rideHistoryId;
     if (rideId == null || rideId.isEmpty) {

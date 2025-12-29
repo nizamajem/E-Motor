@@ -9,6 +9,9 @@ class HistoryEntry {
     required this.plate,
     required this.rentalDuration,
     required this.emission,
+    required this.distanceKmValue,
+    required this.carbonEmissionsValue,
+    required this.startDate,
     required this.startTime,
     required this.endTime,
     required this.startPlace,
@@ -95,8 +98,9 @@ class HistoryEntry {
 
     String formatTime(DateTime? dt) {
       if (dt == null) return '-';
-      final hour = dt.hour.toString().padLeft(2, '0');
-      final minute = dt.minute.toString().padLeft(2, '0');
+      final shifted = dt.add(const Duration(hours: 8));
+      final hour = shifted.hour.toString().padLeft(2, '0');
+      final minute = shifted.minute.toString().padLeft(2, '0');
       return '$hour:$minute';
     }
 
@@ -129,6 +133,9 @@ class HistoryEntry {
     final startLng = json['start_position_longitude'];
     final endLat = json['end_position_latitude'];
     final endLng = json['end_position_longitude'];
+    final distanceMeters =
+        toDouble(json['total_distance_meters'] ?? json['distance_m']);
+    final carbonEmissions = toDouble(json['carbon_emissions']);
     final plate = toText(bike?['vehicle_number'] ?? emotor?['vehicle_number']) ??
         toText(json['plate']) ??
         '-';
@@ -147,10 +154,13 @@ class HistoryEntry {
       id: json['id']?.toString() ?? '',
       date: formatDate(startAt),
       durationAndCost: durationAndCost,
-      distanceKm: formatDistance(json['total_distance_meters'] ?? json['distance_m']),
+      distanceKm: formatDistance(distanceMeters),
       plate: plate,
       rentalDuration: formatDuration(startAt, endAt),
       emission: formatNumber(json['carbon_emissions'], ' g'),
+      distanceKmValue: distanceMeters == 0 ? 0 : distanceMeters / 1000,
+      carbonEmissionsValue: carbonEmissions,
+      startDate: startAt,
       startTime: formatTime(startAt),
       endTime: formatTime(endAt),
       startPlace: startPlace,
@@ -168,6 +178,9 @@ class HistoryEntry {
   final String plate;
   final String rentalDuration;
   final String emission;
+  final double distanceKmValue;
+  final double carbonEmissionsValue;
+  final DateTime? startDate;
   final String startTime;
   final String endTime;
   final String startPlace;
