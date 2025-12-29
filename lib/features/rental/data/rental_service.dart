@@ -239,6 +239,7 @@ class RentalService {
     }
 
     final session = UserSession(token: token, name: name, email: email, userId: userId);
+    SessionManager.instance.clearRental();
     await SessionManager.instance.saveUser(session);
     if (user != null) {
       await SessionManager.instance.saveUserProfile(user);

@@ -374,15 +374,14 @@ class _ProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: isDelete
-                  ? Colors.redAccent
-                  : isEditable
-                      ? const Color(0xFF2C7BFE)
-                      : const Color(0xFFBAC2D0),
-            ),
+            if (isEditable || isDelete)
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: isDelete
+                    ? Colors.redAccent
+                    : const Color(0xFF2C7BFE),
+              ),
           ],
         ),
       ),

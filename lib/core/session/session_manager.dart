@@ -73,6 +73,7 @@ class SessionManager {
 
   UserSession? _user;
   RentalSession? _rental;
+  DateTime? _rentalStartedAt;
   String? _emotorId; // e-motor bound to this user
   String? _emotorImei; // IMEI bound to this user
   Map<String, dynamic>? _userProfile;
@@ -82,6 +83,7 @@ class SessionManager {
   String? get token => _user?.token;
   UserSession? get user => _user;
   RentalSession? get rental => _rental;
+  DateTime? get rentalStartedAt => _rentalStartedAt;
   String? get emotorId => _emotorId;
   String? get emotorImei => _emotorImei;
   Map<String, dynamic>? get userProfile => _userProfile;
@@ -155,6 +157,15 @@ class SessionManager {
     _emotorId ??= session.emotorId;
   }
 
+  void setRentalStartedAt(DateTime? startedAt) {
+    _rentalStartedAt = startedAt;
+  }
+
+  void clearRental() {
+    _rental = null;
+    _rentalStartedAt = null;
+  }
+
   Future<void> saveEmotorId(String id) async {
     _emotorId = id;
     final prefs = await SharedPreferences.getInstance();
@@ -215,6 +226,7 @@ class SessionManager {
   void clear() {
     _user = null;
     _rental = null;
+    _rentalStartedAt = null;
     _emotorId = null;
     _emotorImei = null;
     _userProfile = null;

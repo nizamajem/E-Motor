@@ -44,9 +44,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
-    _hasRental = (_rental?.rideHistoryId ?? '').isNotEmpty;
+    _hasRental = _rental != null;
     _requireStart = !_hasRental;
-    _elapsedSeconds = _hasRental ? 0 : 0;
+    _elapsedSeconds = 0;
+    final startedAt = SessionManager.instance.rentalStartedAt;
+    if (_hasRental && startedAt != null) {
+      final diff = DateTime.now().difference(startedAt);
+      if (!diff.isNegative) {
+        _elapsedSeconds = diff.inSeconds;
+      }
+    }
     _ensureTimer();
     if (_hasRental) {
       _startStatusListener();
@@ -446,6 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _elapsedSeconds = 0;
         _requireStart = false;
       });
+      SessionManager.instance.setRentalStartedAt(DateTime.now());
       _ensureTimer();
       _startStatusListener();
     } catch (e) {
@@ -498,6 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _requireStart = true;
         _elapsedSeconds = 0;
       });
+      SessionManager.instance.setRentalStartedAt(null);
       Navigator.of(context).push(
         appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
       );

@@ -109,330 +109,306 @@ class DetailHistoryScreen extends StatelessWidget {
     int rating = 4;
     bool isSending = false;
     final l10n = AppLocalizations.of(context);
-    return showModalBottomSheet(
+    return showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierDismissible: true,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 12,
-            right: 12,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 14,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setState) {
-              return Container(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 150),
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Dialog(
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x1A000000),
-                      blurRadius: 18,
-                      offset: Offset(0, 10),
-                    ),
-                  ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        height: 4,
-                        width: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.giveFeedback,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      l10n.feedbackHint,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: List.generate(5, (index) {
-                        final filled = index < rating;
-                        return GestureDetector(
-                          onTap: () => setState(() => rating = index + 1),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Icon(
-                              filled ? Icons.star_rounded : Icons.star_border_rounded,
-                              size: 28,
-                              color: filled ? accent : Colors.grey.shade400,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F9FC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5EAF2)),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: TextField(
-                        controller: controller,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: l10n.feedbackInput,
-                          border: InputBorder.none,
-                          hintStyle: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: isSending ? null : () => Navigator.of(ctx).pop(),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              side: const BorderSide(color: Color(0xFFE2E7F0)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              l10n.cancel,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey.shade700,
-                              ),
+                        Center(
+                          child: Container(
+                            height: 4,
+                            width: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                      child: ElevatedButton(
-                            onPressed: isSending
-                                ? null
-                                : () async {
-                                    final text = controller.text.trim();
-                                    if (text.isEmpty) {
-                                      ScaffoldMessenger.of(ctx).showSnackBar(
-                                        SnackBar(content: Text(l10n.feedbackInput)),
-                                      );
-                                      return;
-                                    }
-                                    if (rating < 1 || rating > 5) {
-                                      return;
-                                    }
-                                    FocusScope.of(ctx).unfocus();
-                                    setState(() => isSending = true);
-                                    try {
-                                      final session = SessionManager.instance;
-                                      final profile = session.userProfile;
-                                      final userId =
-                                          session.user?.userId ??
-                                          profile?['id']?.toString();
-                                      final tenantId =
-                                          profile?['tenantId']?.toString() ??
-                                          profile?['tenant_id']?.toString();
-                                      await FeedbackService().createFeedback(
-                                        userId: userId,
-                                        tenantId: tenantId,
-                                        userCyclingHistoryId: item.id,
-                                        rating: rating,
-                                        feedback: text,
-                                      );
-                                      if (context.mounted) {
-                                        Navigator.of(ctx).pop();
-                                      }
-                                      if (context.mounted) {
-                                        showDialog<void>(
-                                          context: context,
-                                          builder: (dialogContext) {
-                                            final dialogL10n =
-                                                AppLocalizations.of(dialogContext);
-                                            return Dialog(
-                                              insetPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 22),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(18),
-                                              ),
-                                              child: Padding(
-                                                padding: const EdgeInsets.fromLTRB(
-                                                    18, 18, 18, 16),
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Container(
-                                                      height: 56,
-                                                      width: 56,
-                                                      decoration: BoxDecoration(
-                                                        shape: BoxShape.circle,
-                                                        color: const Color(
-                                                            0xFF2C7BFE),
-                                                        boxShadow: const [
-                                                          BoxShadow(
-                                                            color:
-                                                                Color(0x332C7BFE),
-                                                            blurRadius: 14,
-                                                            offset: Offset(0, 6),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons.check_rounded,
-                                                        color: Colors.white,
-                                                        size: 30,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    Text(
-                                                      dialogL10n
-                                                          .feedbackSuccessTitle,
-                                                      textAlign: TextAlign.center,
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: Colors.black87,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text(
-                                                      dialogL10n
-                                                          .feedbackSuccessBody,
-                                                      textAlign: TextAlign.center,
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 12.5,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        color:
-                                                            Colors.grey.shade600,
-                                                        height: 1.4,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 14),
-                                                    SizedBox(
-                                                      width: double.infinity,
-                                                      child: ElevatedButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                                    dialogContext)
-                                                                .pop(),
-                                                        style: ElevatedButton
-                                                            .styleFrom(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                      vertical: 11),
-                                                          backgroundColor:
-                                                              const Color(
-                                                                  0xFF2C7BFE),
-                                                          shape:
-                                                              RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(12),
-                                                          ),
-                                                          elevation: 0,
-                                                        ),
-                                                        child: Text(
-                                                          dialogL10n
-                                                              .feedbackSuccessCta,
-                                                          style:
-                                                              GoogleFonts.poppins(
-                                                            fontSize: 13,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: Colors.white,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        );
-                                      }
-                                    } on ApiException catch (e) {
-                                      ScaffoldMessenger.of(ctx).showSnackBar(
-                                        SnackBar(content: Text(e.message)),
-                                      );
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(ctx).showSnackBar(
-                                        SnackBar(content: Text(e.toString())),
-                                      );
-                                    } finally {
-                                      if (context.mounted) {
-                                        setState(() => isSending = false);
-                                      }
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 11),
-                              backgroundColor: accent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: isSending
-                                ? const SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    l10n.send,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.giveFeedback,
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          l10n.feedbackHint,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: List.generate(5, (index) {
+                            final filled = index < rating;
+                            return GestureDetector(
+                              onTap: () => setState(() => rating = index + 1),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Icon(
+                                  filled
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
+                                  size: 28,
+                                  color: filled ? accent : Colors.grey.shade400,
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F9FC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5EAF2)),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: l10n.feedbackInput,
+                              border: InputBorder.none,
+                              hintStyle: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed:
+                                    isSending ? null : () => Navigator.of(ctx).pop(),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 11),
+                                  side: const BorderSide(color: Color(0xFFE2E7F0)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  l10n.cancel,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: isSending
+                                    ? null
+                                    : () async {
+                                        final text = controller.text.trim();
+                                        if (text.isEmpty) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text(l10n.feedbackInput)),
+                                          );
+                                          return;
+                                        }
+                                        if (rating < 1 || rating > 5) {
+                                          return;
+                                        }
+                                        FocusScope.of(ctx).unfocus();
+                                        setState(() => isSending = true);
+                                        try {
+                                          final session = SessionManager.instance;
+                                          final profile = session.userProfile;
+                                          final userId =
+                                              session.user?.userId ?? profile?['id']?.toString();
+                                          final tenantId =
+                                              profile?['tenantId']?.toString() ??
+                                                  profile?['tenant_id']?.toString();
+                                          await FeedbackService().createFeedback(
+                                            userId: userId,
+                                            tenantId: tenantId,
+                                            userCyclingHistoryId: item.id,
+                                            rating: rating,
+                                            feedback: text,
+                                          );
+                                          if (context.mounted) {
+                                            Navigator.of(ctx).pop();
+                                          }
+                                          if (context.mounted) {
+                                            showDialog<void>(
+                                              context: context,
+                                              builder: (dialogContext) {
+                                                final dialogL10n =
+                                                    AppLocalizations.of(dialogContext);
+                                                return Dialog(
+                                                  insetPadding:
+                                                      const EdgeInsets.symmetric(horizontal: 22),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(18),
+                                                  ),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Container(
+                                                          height: 56,
+                                                          width: 56,
+                                                          decoration: BoxDecoration(
+                                                            shape: BoxShape.circle,
+                                                            color: const Color(0xFF2C7BFE),
+                                                            boxShadow: const [
+                                                              BoxShadow(
+                                                                color: Color(0x332C7BFE),
+                                                                blurRadius: 14,
+                                                                offset: Offset(0, 6),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          child: const Icon(
+                                                            Icons.check_rounded,
+                                                            color: Colors.white,
+                                                            size: 30,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 12),
+                                                        Text(
+                                                          dialogL10n.feedbackSuccessTitle,
+                                                          textAlign: TextAlign.center,
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 15,
+                                                            fontWeight: FontWeight.w800,
+                                                            color: Colors.black87,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        Text(
+                                                          dialogL10n.feedbackSuccessBody,
+                                                          textAlign: TextAlign.center,
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 12.5,
+                                                            fontWeight: FontWeight.w500,
+                                                            color: Colors.grey.shade600,
+                                                            height: 1.4,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 14),
+                                                        SizedBox(
+                                                          width: double.infinity,
+                                                          child: ElevatedButton(
+                                                            onPressed: () =>
+                                                                Navigator.of(dialogContext).pop(),
+                                                            style: ElevatedButton.styleFrom(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                  vertical: 11),
+                                                              backgroundColor: const Color(0xFF2C7BFE),
+                                                              shape: RoundedRectangleBorder(
+                                                                borderRadius: BorderRadius.circular(12),
+                                                              ),
+                                                              elevation: 0,
+                                                            ),
+                                                            child: Text(
+                                                              dialogL10n.feedbackSuccessCta,
+                                                              style: GoogleFonts.poppins(
+                                                                fontSize: 13,
+                                                                fontWeight: FontWeight.w700,
+                                                                color: Colors.white,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            );
+                                          }
+                                        } on ApiException catch (e) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text(e.message)),
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text(e.toString())),
+                                          );
+                                        } finally {
+                                          if (context.mounted) {
+                                            setState(() => isSending = false);
+                                          }
+                                        }
+                                      },
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 11),
+                                  backgroundColor: accent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: isSending
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        l10n.send,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         );
       },
     );
