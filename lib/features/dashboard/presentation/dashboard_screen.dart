@@ -78,7 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _isActive = data.motorOn;
           }
           _hasRental = true;
-          if (data.rideSeconds > 0) {
+          if (data.rideSeconds > 0 && _shouldSyncElapsed(data.rideSeconds)) {
             _elapsedSeconds = data.rideSeconds;
           }
         });
@@ -88,6 +88,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       onError: (_) {},
     );
+  }
+
+  bool _shouldSyncElapsed(int serverSeconds) {
+    if (serverSeconds <= 0) return false;
+    final startedAt = SessionManager.instance.rentalStartedAt;
+    if (startedAt != null) {
+      final expected = DateTime.now().difference(startedAt).inSeconds;
+      if (expected.isNegative) return false;
+      final delta = (serverSeconds - expected).abs();
+      return delta <= 30;
+    }
+    if (_elapsedSeconds == 0) {
+      return serverSeconds < 24 * 3600;
+    }
+    if (serverSeconds < _elapsedSeconds) return false;
+    return (serverSeconds - _elapsedSeconds) <= 60;
   }
 
   @override
@@ -506,6 +522,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _requireStart = true;
         _elapsedSeconds = 0;
       });
+      SessionManager.instance.clearRental();
       SessionManager.instance.setRentalStartedAt(null);
       Navigator.of(context).push(
         appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
@@ -1039,34 +1056,55 @@ class _RentalTimeTile extends StatelessWidget {
           children: [
             Icon(icon, color: fg, size: 20),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label, style: labelStyle.copyWith(color: fg)),
-                if (value.isNotEmpty)
-                  Text(value, style: valueStyle.copyWith(color: fg)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: labelStyle.copyWith(color: fg),
+                  ),
+                  if (value.isNotEmpty)
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: valueStyle.copyWith(color: fg),
+                    ),
+                ],
+              ),
             ),
-            const Spacer(),
             if (active)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  AppLocalizations.of(context).live,
-                  style: GoogleFonts.poppins(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      AppLocalizations.of(context).live,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
             if (!active)
-              Icon(Icons.timer_outlined, color: baseColor, size: 18),
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Icon(Icons.timer_outlined, color: baseColor, size: 18),
+              ),
           ],
         ),
       ),

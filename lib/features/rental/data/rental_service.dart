@@ -46,10 +46,21 @@ class RideStatus {
         merged.containsKey('is_active') ||
         hasStatusText;
     final isAccOn = statusStr.toUpperCase().contains('ON');
-    final rideSeconds =
-        toDouble(merged['ride_time_seconds'] ?? merged['ride_time']);
-    final carbon =
-        toDouble(merged['carbon_emissions'] ?? merged['carbon_reduction']);
+    final rawRideSeconds = merged['ride_time_seconds'] ?? merged['ride_time'];
+    var rideSeconds = toDouble(rawRideSeconds);
+    // Some backends send milliseconds; normalize to seconds if value is huge.
+    if (rawRideSeconds != null && rideSeconds > 100000) {
+      rideSeconds = rideSeconds / 1000;
+    }
+    final carbon = toDouble(
+      merged['carbon_emissions'] ??
+          merged['carbon_reduction'] ??
+          merged['carbonReduction'] ??
+          merged['carbon_reduction_grams'] ??
+          merged['co2_saved'] ??
+          merged['co2'] ??
+          merged['carbon'],
+    );
     final calories = toDouble(merged['calories']);
     final distanceMeters = toDouble(merged['total_distance_meters'] ??
         merged['distance_m'] ??

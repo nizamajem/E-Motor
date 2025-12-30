@@ -118,14 +118,29 @@ class HistoryEntry {
       return '${minutes.toString().padLeft(2, '0')} ${l10n.durationMinute}';
     }
 
+    double normalizeDurationSeconds(double seconds) {
+      if (seconds <= 0) return 0;
+      if (seconds > 1000000000) {
+        return seconds / 1000000; // microseconds
+      }
+      if (seconds > 10000000) {
+        return seconds / 1000; // milliseconds
+      }
+      return seconds;
+    }
+
     final bike = asMap(json['bike']);
     final emotor = asMap(json['eMotor']) ?? asMap(json['emotor']);
     final startAt = DateTime.tryParse(
         toText(json['start_position_time']) ?? toText(json['start_date_time']) ?? '');
     final endAt = DateTime.tryParse(
         toText(json['end_position_time']) ?? toText(json['end_date_time']) ?? '');
-    final rideSeconds = toDouble(
-      json['ride_time_seconds'] ?? json['usage_time_seconds'] ?? json['ride_time'],
+    final rideSeconds = normalizeDurationSeconds(
+      toDouble(
+        json['ride_time_seconds'] ??
+            json['usage_time_seconds'] ??
+            json['ride_time'],
+      ),
     );
     final amountPaid = json['amount_paid'];
     final pauseAmount = json['pause_amount'];
@@ -135,12 +150,29 @@ class HistoryEntry {
     final endLng = json['end_position_longitude'];
     final distanceMeters =
         toDouble(json['total_distance_meters'] ?? json['distance_m']);
-    final carbonEmissions = toDouble(json['carbon_emissions']);
+    final carbonEmissions = toDouble(
+      json['carbon_emissions'] ??
+          json['carbon_reduction'] ??
+          json['carbonReduction'] ??
+          json['carbon_reduction_grams'] ??
+          json['co2_saved'] ??
+          json['co2'] ??
+          json['carbon'],
+    );
     final plate = toText(bike?['vehicle_number'] ?? emotor?['vehicle_number']) ??
         toText(json['plate']) ??
         '-';
-    final durationText =
-        rideSeconds == 0 ? '-' : '${(rideSeconds / 60).round()} min';
+    String durationText = '-';
+    if (startAt != null && endAt != null) {
+      final diff = endAt.difference(startAt);
+      if (!diff.isNegative && diff.inSeconds <= 7 * 24 * 3600) {
+        final minutes = (diff.inSeconds / 60).round();
+        durationText = '$minutes min';
+      }
+    }
+    if (durationText == '-' && rideSeconds > 0) {
+      durationText = '${(rideSeconds / 60).round()} min';
+    }
     final durationAndCost = amountPaid == null
         ? durationText
         : '$durationText - ${formatCurrency(amountPaid)}';
@@ -157,7 +189,16 @@ class HistoryEntry {
       distanceKm: formatDistance(distanceMeters),
       plate: plate,
       rentalDuration: formatDuration(startAt, endAt),
-      emission: formatNumber(json['carbon_emissions'], ' g'),
+      emission: formatNumber(
+        json['carbon_emissions'] ??
+            json['carbon_reduction'] ??
+            json['carbonReduction'] ??
+            json['carbon_reduction_grams'] ??
+            json['co2_saved'] ??
+            json['co2'] ??
+            json['carbon'],
+        ' g',
+      ),
       distanceKmValue: distanceMeters == 0 ? 0 : distanceMeters / 1000,
       carbonEmissionsValue: carbonEmissions,
       startDate: startAt,

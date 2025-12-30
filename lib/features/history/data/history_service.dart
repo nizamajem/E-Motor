@@ -20,10 +20,18 @@ class HistoryService {
   Future<List<HistoryEntry>> fetchHistoryById(String rideId) async {
     if (SessionManager.instance.token == null) return [];
     if (rideId.isEmpty) return [];
-    final res = await _client.getJson(
-      '${ApiConfig.historyByIdPath}/$rideId',
-      auth: true,
-    );
+    Map<String, dynamic> res;
+    try {
+      res = await _client.getJson(
+        '${ApiConfig.historyByIdPath}/$rideId',
+        auth: true,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return [];
+      rethrow;
+    } on FormatException {
+      return [];
+    }
     // API returns single history object; wrap into list for UI.
     final data = res['data'] ?? res;
     if (data is List) {
@@ -37,10 +45,18 @@ class HistoryService {
   Future<List<HistoryEntry>> fetchHistoryByUser(String userId) async {
     if (SessionManager.instance.token == null) return [];
     if (userId.isEmpty) return [];
-    final res = await _client.getJson(
-      '${ApiConfig.historyByUserPath}/$userId',
-      auth: true,
-    );
+    Map<String, dynamic> res;
+    try {
+      res = await _client.getJson(
+        '${ApiConfig.historyByUserPath}/$userId',
+        auth: true,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return [];
+      rethrow;
+    } on FormatException {
+      return [];
+    }
     final data = res['data'] ?? res;
     if (data is List) {
       return data
