@@ -69,14 +69,16 @@ flutter:
     - assets/images/onboard-smart.png
     - assets/images/onboard-unlock.png
     - assets/images/dashboard.png
-    - assets/images/logo_new.png
+    - assets/images/logo.png
     
 flutter_launcher_icons:
+  generate: true
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/logo_new.png"
+  remove_alpha_ios: true
+  image_path: "assets/images/logo.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/logo_new.png"
+  adaptive_icon_foreground: "assets/images/logo.png"
 
 
   # To add assets to your application, add an assets section, like this:
