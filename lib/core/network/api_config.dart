@@ -1,15 +1,22 @@
 class ApiConfig {
   /// Base URL to hit backend services.
   /// Override at build time with --dart-define API_BASE_URL=https://your-api
-  static const String baseUrl =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://reflowapp.ptms3.com/api');
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://reflowapp.ptms3.com/api',
+  );
 
   /// eMotor ID bound to the logged-in user. Set via --dart-define=EMOTOR_ID=...
-  static const String emotorId = String.fromEnvironment('EMOTOR_ID', defaultValue: '');
+  static const String emotorId = String.fromEnvironment(
+    'EMOTOR_ID',
+    defaultValue: '',
+  );
 
   /// Login session lifetime in seconds, sent as "detik".
-  static const int loginSessionSeconds =
-      int.fromEnvironment('LOGIN_SESSION_SECONDS', defaultValue: 3600);
+  static const int loginSessionSeconds = int.fromEnvironment(
+    'LOGIN_SESSION_SECONDS',
+    defaultValue: 3600,
+  );
 
   /// Paths grouped here to keep usage consistent across the app.
   static const String loginPath = '/auth/login-emotor';
@@ -21,6 +28,7 @@ class ApiConfig {
   static const String accCommandPath = '/emotors/command/acc';
   static const String findCommandPath = '/emotors/command/find';
   static const String historyByIdPath = '/user-cycling-history/get-by-id';
-  static const String historyByUserPath = '/user-cycling-history/all-e-motors/by-user';
+  static const String historyByUserPath =
+      '/user-cycling-history/all-e-motors/by-user';
   static const String feedbacksPath = '/feedbacks';
 }
