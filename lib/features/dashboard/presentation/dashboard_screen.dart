@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../history/presentation/history_screen.dart';
@@ -270,7 +267,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       onFind: _handleFind,
                                     ),
                                     const SizedBox(height: 10),
-                                    _LockSlider(
+                                    _PowerButtons(
                                       isActive: _isActive,
                                       disabled: _isToggling,
                                       onToggle: _handleToggle,
@@ -948,32 +945,6 @@ class _GridCards extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionTile(
-                  label: l10n.on,
-                  icon: Icons.flash_on_rounded,
-                  color: const Color(0xFF2C7BFE),
-                  active: isActive,
-                  dimmed: dimmed,
-                  onTap: isBusy ? null : () => onToggle(true),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionTile(
-                  label: l10n.off,
-                  icon: Icons.power_settings_new_rounded,
-                  color: const Color(0xFF2C7BFE),
-                  active: !isActive,
-                  dimmed: dimmed,
-                  onTap: isBusy ? null : () => onToggle(false),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -1330,8 +1301,8 @@ class _EndRentalTile extends StatelessWidget {
   }
 }
 
-class _LockSlider extends StatefulWidget {
-  const _LockSlider({
+class _PowerButtons extends StatelessWidget {
+  const _PowerButtons({
     required this.isActive,
     required this.onToggle,
     this.disabled = false,
@@ -1342,140 +1313,96 @@ class _LockSlider extends StatefulWidget {
   final ValueChanged<bool> onToggle;
 
   @override
-  State<_LockSlider> createState() => _LockSliderState();
+  Widget build(BuildContext context) {
+    const onColor = Color(0xFF2C7BFE);
+    const offColor = Color(0xFFFFA45B);
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PowerButton(
+              label: l10n.on,
+              icon: Icons.flash_on_rounded,
+              color: onColor,
+              active: isActive,
+              disabled: disabled,
+              onTap: () => onToggle(true),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _PowerButton(
+              label: l10n.off,
+              icon: Icons.power_settings_new_rounded,
+              color: offColor,
+              active: !isActive,
+              disabled: disabled,
+              onTap: () => onToggle(false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _LockSliderState extends State<_LockSlider> {
-  double _position = -1.0; // -1 to 1
+class _PowerButton extends StatelessWidget {
+  const _PowerButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.active,
+    required this.disabled,
+    required this.onTap,
+  });
 
-  @override
-  void initState() {
-    super.initState();
-    _position = widget.isActive ? 1.0 : -1.0;
-  }
-
-  @override
-  void didUpdateWidget(covariant _LockSlider oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _position = widget.isActive ? 1.0 : -1.0;
-  }
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool active;
+  final bool disabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Lively palette: blue when unlocked, orange when locked.
-    const unlockColor = Color(0xFF2C7BFE);
-    const lockColor = Color(0xFFFFA45B);
-    final t = ((_position + 1) / 2).clamp(0.0, 1.0);
-    final startColor = Color.lerp(lockColor, unlockColor, t)!;
-    final endColor =
-        Color.lerp(lockColor, unlockColor, (t + 0.25).clamp(0.0, 1.0))!;
-    final knobColor = Color.lerp(lockColor, Colors.black, t * 0.22)!;
-    final textColor = Color.lerp(
-      Colors.grey.shade700,
-      Colors.white,
-      (t * 1.2).clamp(0.0, 1.0),
-    )!;
-    final isLocked = !widget.isActive;
-    final statusIcon = isLocked ? Icons.lock_rounded : Icons.lock_open_rounded;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: GestureDetector(
-        onHorizontalDragUpdate: widget.disabled
-            ? null
-            : (details) {
-                setState(() {
-                  _position =
-                      (_position + details.delta.dx / 120).clamp(-1.0, 1.0);
-                });
-              },
-        onHorizontalDragEnd: widget.disabled
-            ? null
-            : (_) {
-                final shouldActivate = _position > 0;
-                widget.onToggle(shouldActivate);
-                setState(() {
-                  _position = shouldActivate ? 1.0 : -1.0;
-                });
-                HapticFeedback.lightImpact();
-              },
+    final isDisabled = disabled;
+    final bg = active ? color : Colors.white;
+    final fg = active ? Colors.white : color;
+    return Opacity(
+      opacity: isDisabled ? 0.6 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: isDisabled ? null : onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
           height: 56,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [startColor, endColor],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-            boxShadow: const [
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+            border: active ? null : Border.all(color: color.withValues(alpha: 0.3)),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x1A2C7BFE),
+                color: color.withValues(alpha: active ? 0.28 : 0.12),
                 blurRadius: 12,
-                offset: Offset(0, 8),
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Stack(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Align(
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(statusIcon, size: 18, color: textColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.isActive
-                          ? AppLocalizations.of(context).slideToLock
-                          : AppLocalizations.of(context).slideToUnlock,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              AnimatedAlign(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                alignment: Alignment((_position).clamp(-1, 1), 0),
-                child: Transform.rotate(
-                  angle: widget.isActive ? math.pi : 0,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    height: 40,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [knobColor, Colors.black],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        width: 1.2,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 10,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.vpn_key_rounded,
-                        color: Colors.white, size: 20),
-                  ),
+              Icon(icon, color: fg, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
                 ),
               ),
             ],
