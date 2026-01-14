@@ -70,6 +70,8 @@ class SessionManager {
   static const _keyUserJson = 'session_user_json';
   static const _keyEmotorJson = 'session_emotor_json';
   static const _keyWalletJson = 'session_wallet_json';
+  static const _keyRentalJson = 'session_rental_json';
+  static const _keyRentalStartedAt = 'session_rental_started_at';
 
   UserSession? _user;
   RentalSession? _rental;
@@ -93,18 +95,27 @@ class SessionManager {
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_keyToken);
-    if (token == null || token.isEmpty) return;
-    _user = UserSession(
-      token: token,
-      name: prefs.getString(_keyName) ?? '',
-      email: prefs.getString(_keyEmail) ?? '',
-      userId: prefs.getString(_keyUserId),
-    );
+    if (token != null && token.isNotEmpty) {
+      _user = UserSession(
+        token: token,
+        name: prefs.getString(_keyName) ?? '',
+        email: prefs.getString(_keyEmail) ?? '',
+        userId: prefs.getString(_keyUserId),
+      );
+    }
     _emotorId = prefs.getString(_keyEmotorId);
     _emotorImei = prefs.getString(_keyEmotorImei);
     _userProfile = _decodeMap(prefs.getString(_keyUserJson));
     _emotorProfile = _decodeMap(prefs.getString(_keyEmotorJson));
     _walletProfile = _decodeMap(prefs.getString(_keyWalletJson));
+    final rentalJson = _decodeMap(prefs.getString(_keyRentalJson));
+    if (rentalJson != null) {
+      _rental = RentalSession.fromJson(rentalJson);
+    }
+    final startedAtMs = prefs.getInt(_keyRentalStartedAt);
+    if (startedAtMs != null && startedAtMs > 0) {
+      _rentalStartedAt = DateTime.fromMillisecondsSinceEpoch(startedAtMs);
+    }
     if ((_emotorId == null || _emotorId!.isEmpty) && _emotorProfile != null) {
       final id = _emotorProfile?['id']?.toString().trim();
       if (id != null && id.isNotEmpty) {
@@ -155,15 +166,18 @@ class SessionManager {
   void saveRental(RentalSession session) {
     _rental = session;
     _emotorId ??= session.emotorId;
+    unawaited(_saveRentalStorage(session));
   }
 
   void setRentalStartedAt(DateTime? startedAt) {
     _rentalStartedAt = startedAt;
+    unawaited(_saveRentalStartedAt(startedAt));
   }
 
   void clearRental() {
     _rental = null;
     _rentalStartedAt = null;
+    unawaited(_clearRentalStorage());
   }
 
   Future<void> saveEmotorId(String id) async {
@@ -246,6 +260,8 @@ class SessionManager {
     await prefs.remove(_keyUserJson);
     await prefs.remove(_keyEmotorJson);
     await prefs.remove(_keyWalletJson);
+    await prefs.remove(_keyRentalJson);
+    await prefs.remove(_keyRentalStartedAt);
   }
 
   Map<String, dynamic>? _decodeMap(String? raw) {
@@ -264,5 +280,36 @@ class SessionManager {
       return;
     }
     await prefs.setString(key, jsonEncode(value));
+  }
+
+  Future<void> _saveRentalStorage(RentalSession session) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _keyRentalJson,
+      jsonEncode({
+        'id': session.id,
+        'emotorId': session.emotorId,
+        'plate': session.plate,
+        'range_km': session.rangeKm,
+        'battery_percent': session.batteryPercent,
+        'motor_on': session.motorOn,
+        'rideHistoryId': session.rideHistoryId,
+      }),
+    );
+  }
+
+  Future<void> _saveRentalStartedAt(DateTime? startedAt) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (startedAt == null) {
+      await prefs.remove(_keyRentalStartedAt);
+      return;
+    }
+    await prefs.setInt(_keyRentalStartedAt, startedAt.millisecondsSinceEpoch);
+  }
+
+  Future<void> _clearRentalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyRentalJson);
+    await prefs.remove(_keyRentalStartedAt);
   }
 }

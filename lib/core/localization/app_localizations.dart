@@ -56,6 +56,13 @@ class AppLocalizations {
       'ending': 'Ending...',
       'live': 'Live',
       'turn_off_before_end': 'Please turn off the e-motor before end rental.',
+      'turn_off_before_end_title': 'Turn off e-motor first',
+      'turn_off_before_end_body':
+          'Please switch off the e-motor before ending the rental.',
+      'checking_emotor_title': 'Checking e-motor status',
+      'checking_emotor_body':
+          'Wait, we are still checking the e-motor status.',
+      'ok': 'OK',
       'end_rental_failed': 'End rental failed: ',
       'start_ride_failed': 'Start ride failed: ',
       'acc_failed': 'ACC command failed.',
@@ -162,6 +169,13 @@ class AppLocalizations {
       'ending': 'Mengakhiri...',
       'live': 'Live',
       'turn_off_before_end': 'Matikan e-motor terlebih dahulu sebelum end rental.',
+      'turn_off_before_end_title': 'Matikan e-motor dulu',
+      'turn_off_before_end_body':
+          'Mohon matikan e-motor sebelum mengakhiri rental.',
+      'checking_emotor_title': 'Cek status e-motor',
+      'checking_emotor_body':
+          'Tunggu, kami masih cek status e-motor.',
+      'ok': 'OK',
       'end_rental_failed': 'End rental gagal: ',
       'start_ride_failed': 'Start ride gagal: ',
       'acc_failed': 'Perintah ACC gagal diproses.',
@@ -268,6 +282,11 @@ class AppLocalizations {
   String get ending => _t('ending');
   String get live => _t('live');
   String get turnOffBeforeEnd => _t('turn_off_before_end');
+  String get turnOffBeforeEndTitle => _t('turn_off_before_end_title');
+  String get turnOffBeforeEndBody => _t('turn_off_before_end_body');
+  String get checkingEmotorTitle => _t('checking_emotor_title');
+  String get checkingEmotorBody => _t('checking_emotor_body');
+  String get ok => _t('ok');
   String get endRentalFailed => _t('end_rental_failed');
   String get startRideFailed => _t('start_ride_failed');
   String get accFailed => _t('acc_failed');

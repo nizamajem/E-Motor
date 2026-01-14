@@ -11,7 +11,9 @@ import '../../profile/presentation/profile_screen.dart';
 import '../../rental/data/rental_service.dart';
 import '../../history/presentation/detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
+import '../../../components/end_rental_notice.dart';
 import '../../../core/navigation/app_route.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
 
@@ -56,6 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     _ensureTimer();
     if (_hasRental) {
+      _refreshStatusOnce();
       _startStatusListener();
     }
   }
@@ -88,6 +91,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       onError: (_) {},
     );
+  }
+
+  Future<void> _refreshStatusOnce() async {
+    if (SessionManager.instance.token == null) return;
+    try {
+      final data = await _rentalService.fetchStatus();
+      if (!mounted) return;
+      setState(() {
+        _status = data;
+        if (data.hasMotorState) {
+          _isActive = data.motorOn;
+          final currentRental = _rental;
+          if (currentRental != null) {
+            final updatedRental = RentalSession(
+              id: currentRental.id,
+              emotorId: currentRental.emotorId,
+              plate: currentRental.plate,
+              rangeKm: currentRental.rangeKm,
+              batteryPercent: currentRental.batteryPercent,
+              motorOn: data.motorOn,
+              rideHistoryId: currentRental.rideHistoryId,
+            );
+            _rental = updatedRental;
+            SessionManager.instance.saveRental(updatedRental);
+          }
+        }
+        _hasRental = true;
+      });
+    } catch (_) {}
   }
 
   bool _shouldSyncElapsed(int serverSeconds) {
@@ -295,6 +327,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         if (ok) {
           _isActive = value;
+          final currentRental = _rental;
+          if (currentRental != null) {
+            final updatedRental = RentalSession(
+              id: currentRental.id,
+              emotorId: currentRental.emotorId,
+              plate: currentRental.plate,
+              rangeKm: currentRental.rangeKm,
+              batteryPercent: currentRental.batteryPercent,
+              motorOn: value,
+              rideHistoryId: currentRental.rideHistoryId,
+            );
+            _rental = updatedRental;
+            SessionManager.instance.saveRental(updatedRental);
+          }
           final current = _status;
           if (current != null) {
             _status = RideStatus(
@@ -442,6 +488,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
+        final startedAt = SessionManager.instance.rentalStartedAt;
+        if (startedAt != null) {
+          final diff = DateTime.now().difference(startedAt);
+          if (!diff.isNegative) {
+            _elapsedSeconds = diff.inSeconds;
+            return;
+          }
+        }
         _elapsedSeconds += 1;
       });
     });
@@ -483,13 +537,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _handleEndRental() async {
     if (_isEnding) return;
-    if (_isActive) {
-      _showSnack(AppLocalizations.of(context).turnOffBeforeEnd);
+    final status = _status;
+    if (_isActive || (status?.hasMotorState == true && status!.motorOn)) {
+      await EndRentalNoticeDialog.show(
+        context,
+        type: EndRentalNoticeType.turnOffRequired,
+      );
       return;
     }
     setState(() => _isEnding = true);
     try {
-      final endedRideId = await _rentalService.endRental();
+      final endedRideId = await _endRentalWithRetry();
+      if (!mounted || endedRideId == null) return;
       _statusSub?.cancel();
       _timer?.cancel();
       final history = await HistoryService().fetchHistoryById(endedRideId);
@@ -534,6 +593,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() => _isEnding = false);
       }
     }
+  }
+
+  Future<String?> _endRentalWithRetry() async {
+    while (mounted) {
+      try {
+        return await _rentalService.endRental();
+      } on ApiException catch (e) {
+        if (e.statusCode == 400) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    return null;
   }
 }
 

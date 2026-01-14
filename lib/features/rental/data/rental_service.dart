@@ -250,7 +250,16 @@ class RentalService {
     }
 
     final session = UserSession(token: token, name: name, email: email, userId: userId);
-    SessionManager.instance.clearRental();
+    final previousUserId = SessionManager.instance.user?.userId ??
+        SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+        SessionManager.instance.userProfile?['id']?.toString().trim();
+    if (previousUserId != null &&
+        previousUserId.isNotEmpty &&
+        userId != null &&
+        userId.isNotEmpty &&
+        previousUserId != userId) {
+      SessionManager.instance.clearRental();
+    }
     await SessionManager.instance.saveUser(session);
     if (user != null) {
       await SessionManager.instance.saveUserProfile(user);
