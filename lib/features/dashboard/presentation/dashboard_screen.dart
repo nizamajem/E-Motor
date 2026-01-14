@@ -818,22 +818,6 @@ class _PlateBadge extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: muted ? Colors.grey.shade200 : const Color(0x1A2C7BFE),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              isActive ? l10n.statusOn : l10n.statusOff,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: muted ? Colors.grey.shade600 : const Color(0xFF2C7BFE),
-              ),
-            ),
-          ),
         ],
       ),
     );
