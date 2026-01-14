@@ -13,6 +13,11 @@ if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(stream)
     }
 }
+val hasKeystore = keystorePropertiesFile.exists() &&
+    listOf("keyAlias", "keyPassword", "storePassword", "storeFile").all { key ->
+        val value = keystoreProperties.getProperty(key)?.trim()
+        !value.isNullOrEmpty()
+    }
 
 android {
     namespace = "com.gridwiz.e_motor"
@@ -37,17 +42,23 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storePassword = keystoreProperties.getProperty("storePassword")
-            storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+        if (hasKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storePassword = keystoreProperties.getProperty("storePassword")
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
