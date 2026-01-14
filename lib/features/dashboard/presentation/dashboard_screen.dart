@@ -262,7 +262,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       isFinding: _isFinding,
                                       elapsedSeconds: _elapsedSeconds,
                                       hasRental: _hasRental,
-                                      onToggle: _handleToggle,
                                       onEnd: _handleEndRental,
                                       onFind: _handleFind,
                                     ),
@@ -828,7 +827,6 @@ class _GridCards extends StatelessWidget {
   const _GridCards({
     required this.isActive,
     required this.dimmed,
-    required this.onToggle,
     required this.isBusy,
     required this.isEnding,
     required this.isFinding,
@@ -847,7 +845,6 @@ class _GridCards extends StatelessWidget {
   final bool isFinding;
   final int elapsedSeconds;
   final bool hasRental;
-  final ValueChanged<bool> onToggle;
   final VoidCallback onEnd;
   final ValueChanged<BuildContext> onFind;
   final RideStatus? status;
@@ -1135,83 +1132,6 @@ class _RentalTimeTile extends StatelessWidget {
                 child: Icon(Icons.timer_outlined, color: baseColor, size: 18),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.active,
-    required this.dimmed,
-    this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool active;
-  final bool dimmed;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bgColor = active ? color : Colors.white;
-    final fg =
-        active ? Colors.white : color.withValues(alpha: dimmed ? 0.45 : 0.8);
-    final border =
-        active ? null : Border.all(color: color.withValues(alpha: 0.25));
-    return Opacity(
-      opacity: dimmed ? 0.55 : 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          height: 58,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(12),
-            border: border,
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x142C7BFE),
-                blurRadius: 10,
-                offset: Offset(0, 6),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: fg, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: fg,
-                    ),
-                  ),
-                ],
-              ),
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 220),
-                opacity: active ? 1 : 0.25,
-                child: Icon(
-                  active ? Icons.check_circle_rounded : Icons.circle_outlined,
-                  color: fg,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
