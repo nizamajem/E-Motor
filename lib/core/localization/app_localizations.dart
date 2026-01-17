@@ -8,8 +8,10 @@ class AppLocalizations {
   static const supportedLocales = [Locale('en'), Locale('id')];
 
   static AppLocalizations of(BuildContext context) {
-    final localizations =
-        Localizations.of<AppLocalizations>(context, AppLocalizations);
+    final localizations = Localizations.of<AppLocalizations>(
+      context,
+      AppLocalizations,
+    );
     return localizations ?? AppLocalizations(const Locale('en'));
   }
 
@@ -28,8 +30,7 @@ class AppLocalizations {
   static const Map<String, Map<String, String>> _strings = {
     'en': {
       'welcome_back': 'Welcome back!',
-      'login_subtitle':
-          'Sign in to continue your ride with Gridwiz E-Motor.',
+      'login_subtitle': 'Sign in to continue your ride with Gridwiz E-Motor.',
       'username': 'Username',
       'username_hint': 'Enter your username',
       'password': 'Password',
@@ -60,8 +61,7 @@ class AppLocalizations {
       'turn_off_before_end_body':
           'Please switch off the e-motor before ending the rental.',
       'checking_emotor_title': 'Checking e-motor status',
-      'checking_emotor_body':
-          'Wait, we are still checking the e-motor status.',
+      'checking_emotor_body': 'Wait, we are still checking the e-motor status.',
       'ok': 'OK',
       'end_rental_failed': 'End rental failed: ',
       'start_ride_failed': 'Start ride failed: ',
@@ -138,6 +138,29 @@ class AppLocalizations {
           'Unlock your e-motor easily and begin your ride instantly, just tap, ride, and go.',
       'duration_hour': 'hr',
       'duration_minute': 'min',
+      'turn_off_confirm_title': 'Turn off e-motor?',
+      'turn_off_confirm_body':
+          'Make sure the vehicle has stopped before turning it off.',
+      'turn_off': 'Turn Off',
+      'loading_connecting_vehicle': 'Connecting to vehicle...',
+      'loading_sending_command': 'Sending command to vehicle...',
+      'loading_finding_vehicle': 'Finding vehicle...',
+      'loading_processing': 'Processing...',
+      'error_no_internet': 'No internet connection. Please check your network.',
+      'no_internet_description':
+          'Check your network.\nThe app will automatically resume when connection is available.',
+      'error_send_command_failed':
+          'Failed to send command to vehicle. Please try again.',
+      'error_vehicle_not_responding':
+          'Connection is slow. The vehicle is not responding.',
+      'error_network_generic': 'Network error occurred. Please try again.',
+      'error_history_not_found': 'Trip details not found.',
+      'end_rental_confirm_title': 'End Rental?',
+      'end_rental_confirm_body':
+          'Make sure the vehicle is turned off and parked properly before ending the rental.',
+      'end_rental_confirm_yes': 'End Rental',
+      'end_rental_confirm_no': 'Cancel',
+      'loading_ending_rental': 'Ending rental...',
     },
     'id': {
       'welcome_back': 'Selamat datang!',
@@ -168,13 +191,13 @@ class AppLocalizations {
       'end_rental': 'Selesai Rental',
       'ending': 'Mengakhiri...',
       'live': 'Live',
-      'turn_off_before_end': 'Matikan e-motor terlebih dahulu sebelum end rental.',
+      'turn_off_before_end':
+          'Matikan e-motor terlebih dahulu sebelum end rental.',
       'turn_off_before_end_title': 'Matikan e-motor dulu',
       'turn_off_before_end_body':
           'Mohon matikan e-motor sebelum mengakhiri rental.',
       'checking_emotor_title': 'Cek status e-motor',
-      'checking_emotor_body':
-          'Tunggu, kami masih cek status e-motor.',
+      'checking_emotor_body': 'Tunggu, kami masih cek status e-motor.',
       'ok': 'OK',
       'end_rental_failed': 'End rental gagal: ',
       'start_ride_failed': 'Start ride gagal: ',
@@ -251,6 +274,29 @@ class AppLocalizations {
           'Buka e-motor dengan mudah dan mulai perjalananmu, cukup tap, ride, lalu jalan.',
       'duration_hour': 'jam',
       'duration_minute': 'menit',
+      'turn_off_confirm_title': 'Matikan e-motor?',
+      'turn_off_confirm_body':
+          'Pastikan kendaraan sudah berhenti sebelum dimatikan.',
+      'turn_off': 'Matikan',
+      'loading_connecting_vehicle': 'Menghubungkan ke kendaraan...',
+      'loading_sending_command': 'Mengirim perintah ke kendaraan...',
+      'loading_finding_vehicle': 'Mencari kendaraan...',
+      'loading_processing': 'Memproses...',
+      'error_no_internet': 'Tidak ada koneksi internet. Periksa jaringan Anda.',
+      'error_send_command_failed':
+          'Gagal mengirim perintah ke kendaraan. Coba lagi.',
+      'error_vehicle_not_responding':
+          'Koneksi lambat. Kendaraan tidak merespons.',
+      'error_network_generic': 'Terjadi gangguan jaringan. Silakan coba lagi.',
+      'error_history_not_found': 'Detail history tidak ditemukan.',
+      'no_internet_description':
+          'Periksa jaringan Anda.\nAplikasi akan otomatis melanjutkan saat koneksi tersedia.',
+      'end_rental_confirm_title': 'End Rental?',
+      'end_rental_confirm_body':
+          'Make sure the vehicle is turned off and parked properly before ending the rental.',
+      'end_rental_confirm_yes': 'End Rental',
+      'end_rental_confirm_no': 'Cancel',
+      'loading_ending_rental': 'Ending rental...',
     },
   };
 
@@ -357,6 +403,25 @@ class AppLocalizations {
   String get onboardSubtitle3 => _t('onboard_subtitle_3');
   String get durationHour => _t('duration_hour');
   String get durationMinute => _t('duration_minute');
+  String get turnOffConfirmTitle => _t('turn_off_confirm_title');
+  String get turnOffConfirmBody => _t('turn_off_confirm_body');
+  String get turnOff => _t('turn_off');
+  String get loadingConnectingVehicle => _t('loading_connecting_vehicle');
+  String get loadingSendingCommand => _t('loading_sending_command');
+  String get loadingFindingVehicle => _t('loading_finding_vehicle');
+  String get loadingProcessing => _t('loading_processing');
+  String get errorNoInternet => _t('error_no_internet');
+  String get errorSendCommandFailed => _t('error_send_command_failed');
+  String get errorVehicleNotResponding => _t('error_vehicle_not_responding');
+  String get errorNetworkGeneric => _t('error_network_generic');
+  String get errorHistoryNotFound => _t('error_history_not_found');
+  String get noInternetConnection => _t('no_internet_connection');
+  String get noInternetDescription => _t('no_internet_description');
+  String get endRentalConfirmTitle => _t('end_rental_confirm_title');
+  String get endRentalConfirmBody => _t('end_rental_confirm_body');
+  String get endRentalConfirmYes => _t('end_rental_confirm_yes');
+  String get endRentalConfirmNo => _t('end_rental_confirm_no');
+  String get loadingEndingRental => _t('loading_ending_rental');
 }
 
 class _AppLocalizationsDelegate

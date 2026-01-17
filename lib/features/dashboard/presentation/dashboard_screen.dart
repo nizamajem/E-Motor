@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:math';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../components/find_no_connection_dialog.dart';
+import '../../../components/loading_dialog.dart';
+import '../../../components/no_internet_dialog.dart';
+import '../../../core/network/network_utils.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../history/data/history_service.dart';
 import '../../profile/presentation/profile_screen.dart';
@@ -37,10 +43,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final RentalService _rentalService = RentalService();
   StreamSubscription<RideStatus>? _statusSub;
   Timer? _timer;
+  static const Duration kIoTCommandTimeout = Duration(seconds: 12);
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+
+  bool _noInternetDialogShown = false;
 
   @override
   void initState() {
     super.initState();
+    _listenInternetConnection();
+
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
     _hasRental = _rental != null;
@@ -62,32 +74,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
+
     _statusSub?.cancel();
     _timer?.cancel();
     super.dispose();
   }
 
+  void _listenInternetConnection() {
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) async {
+      if (!mounted) return;
+
+      final hasInternet =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+
+      if (!hasInternet) {
+        if (_noInternetDialogShown) return;
+
+        _noInternetDialogShown = true;
+        await showNoInternetDialog(context);
+        _noInternetDialogShown = false;
+      }
+    });
+  }
+
   void _startStatusListener() {
     if (SessionManager.instance.token == null) return;
-    _statusSub = _rentalService.statusStream().listen(
-      (data) {
-        if (!mounted) return;
-        setState(() {
-          _status = data;
-          if (data.hasMotorState) {
-            _isActive = data.motorOn;
-          }
-          _hasRental = true;
-          if (data.rideSeconds > 0 && _shouldSyncElapsed(data.rideSeconds)) {
-            _elapsedSeconds = data.rideSeconds;
-          }
-        });
-        if (_hasRental) {
-          _ensureTimer();
+    _statusSub = _rentalService.statusStream().listen((data) {
+      if (!mounted) return;
+      setState(() {
+        _status = data;
+        if (data.hasMotorState) {
+          _isActive = data.motorOn;
         }
-      },
-      onError: (_) {},
-    );
+        _hasRental = true;
+        if (data.rideSeconds > 0 && _shouldSyncElapsed(data.rideSeconds)) {
+          _elapsedSeconds = data.rideSeconds;
+        }
+      });
+      if (_hasRental) {
+        _ensureTimer();
+      }
+    }, onError: (_) {});
   }
 
   Future<void> _refreshStatusOnce() async {
@@ -155,40 +185,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final l10n = AppLocalizations.of(context);
     final emotorFromProfile = SessionManager.instance.emotorProfile;
     final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
-    final emotorPlate = emotorFromProfile?['vehicle_number']?.toString().trim() ??
+    final emotorPlate =
+        emotorFromProfile?['vehicle_number']?.toString().trim() ??
         emotorFromProfile?['vehicleNumber']?.toString().trim() ??
         emotorFromProfile?['plate']?.toString().trim() ??
         emotorFromProfile?['license_plate']?.toString().trim() ??
         (emotorFromUser is Map<String, dynamic>
             ? (emotorFromUser['vehicle_number']?.toString().trim() ??
-                emotorFromUser['vehicleNumber']?.toString().trim() ??
-                emotorFromUser['plate']?.toString().trim() ??
-                emotorFromUser['license_plate']?.toString().trim())
+                  emotorFromUser['vehicleNumber']?.toString().trim() ??
+                  emotorFromUser['plate']?.toString().trim() ??
+                  emotorFromUser['license_plate']?.toString().trim())
             : null);
-    final emotorName = emotorFromProfile?['modelBikeId_model']?.toString().trim() ??
+    final emotorName =
+        emotorFromProfile?['modelBikeId_model']?.toString().trim() ??
         emotorFromProfile?['model_name']?.toString().trim() ??
         emotorFromProfile?['model']?.toString().trim() ??
         emotorFromProfile?['name']?.toString().trim() ??
         (emotorFromUser is Map<String, dynamic>
             ? (emotorFromUser['modelBikeId_model']?.toString().trim() ??
-                emotorFromUser['model_name']?.toString().trim() ??
-                emotorFromUser['model']?.toString().trim() ??
-                emotorFromUser['name']?.toString().trim())
+                  emotorFromUser['model_name']?.toString().trim() ??
+                  emotorFromUser['model']?.toString().trim() ??
+                  emotorFromUser['name']?.toString().trim())
             : null);
     final emotorFallback = (emotorPlate != null && emotorPlate.isNotEmpty)
         ? emotorPlate
         : (emotorName != null && emotorName.isNotEmpty)
-            ? emotorName
-            : 'E-Motor';
-    final plateText = firstNonEmpty(
-      [
-        status?.plate,
-        rental?.plate,
-        emotorPlate,
-        emotorName,
-      ],
-      emotorFallback,
-    );
+        ? emotorName
+        : 'E-Motor';
+    final plateText = firstNonEmpty([
+      status?.plate,
+      rental?.plate,
+      emotorPlate,
+      emotorName,
+    ], emotorFallback);
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -206,7 +235,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             const SizedBox(height: 10),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
                               child: Column(
                                 children: [
                                   RichText(
@@ -221,7 +252,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         TextSpan(
                                           text: riderName,
                                           style: const TextStyle(
-                                              color: Color(0xFF2C7BFE)),
+                                            color: Color(0xFF2C7BFE),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -293,15 +325,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   activeTab: BottomNavTab.dashboard,
                   onHistoryTap: () {
                     Navigator.of(context).push(
-                      appRoute(const HistoryScreen(),
-                          direction: AxisDirection.left),
+                      appRoute(
+                        const HistoryScreen(),
+                        direction: AxisDirection.left,
+                      ),
                     );
                   },
                   onDashboardTap: () {},
                   onProfileTap: () {
                     Navigator.of(context).push(
-                      appRoute(const ProfileScreen(),
-                          direction: AxisDirection.left),
+                      appRoute(
+                        const ProfileScreen(),
+                        direction: AxisDirection.left,
+                      ),
                     );
                   },
                 ),
@@ -315,14 +351,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _handleToggle(bool value) async {
+    final l10n = AppLocalizations.of(context);
     if (_isToggling) return;
+
+    if (!value) {
+      final confirmed = await showTurnOffConfirmDialog(context);
+      if (confirmed != true) return;
+    }
+
+    // 1️⃣ CEK INTERNET DULU
+    final hasInternet = await hasInternetConnection();
+    if (!hasInternet) {
+      _showSnack(l10n.errorNoInternet);
+      return;
+    }
+
     setState(() => _isToggling = true);
+
+    showLoadingDialog(
+      context,
+      message: value
+          ? l10n.loadingConnectingVehicle
+          : l10n.loadingSendingCommand,
+    );
+
     try {
-      final ok = await _rentalService.toggleMotor(value);
+      // 2️⃣ KIRIM COMMAND + TIMEOUT
+      final ok = await _rentalService
+          .toggleMotor(value)
+          .timeout(kIoTCommandTimeout);
+
       if (!mounted) return;
-      setState(() {
-        if (ok) {
+
+      hideLoadingDialog(context);
+
+      if (ok) {
+        setState(() {
           _isActive = value;
+
           final currentRental = _rental;
           if (currentRental != null) {
             final updatedRental = RentalSession(
@@ -337,29 +403,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _rental = updatedRental;
             SessionManager.instance.saveRental(updatedRental);
           }
-          final current = _status;
-          if (current != null) {
-            _status = RideStatus(
-              motorOn: value,
-              rangeKm: current.rangeKm,
-              pingQuality: current.pingQuality,
-              rentalMinutes: current.rentalMinutes,
-              carbonReduction: current.carbonReduction,
-              rideSeconds: current.rideSeconds,
-              carbonEmissions: current.carbonEmissions,
-              calories: current.calories,
-              hasMotorState: true,
-              plate: current.plate,
-              batteryPercent: current.batteryPercent,
-            );
-          }
-        }
-      });
-      if (!ok) {
-        _showSnack(AppLocalizations.of(context).accFailed);
+        });
+      } else {
+        _showSnack(l10n.errorSendCommandFailed);
       }
-    } catch (e) {
-      _showSnack('${AppLocalizations.of(context).sendFailed}$e');
+    }
+    // 3️⃣ TIMEOUT (SINYAL JELEK / IOT TIDAK RESPON)
+    on TimeoutException {
+      hideLoadingDialog(context);
+      _showSnack(l10n.errorVehicleNotResponding);
+    }
+    // 4️⃣ ERROR LAIN (API / IOT)
+    catch (e) {
+      if (mounted) {
+        hideLoadingDialog(context);
+        _showSnack(l10n.errorNetworkGeneric);
+      }
     } finally {
       if (mounted) {
         setState(() => _isToggling = false);
@@ -368,19 +427,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _handleFind(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     if (_isFinding) return;
+
+    // 1️⃣ CEK INTERNET AWAL
+    final connectivity = await Connectivity().checkConnectivity();
+    if (connectivity == ConnectivityResult.none) {
+      await showFindNoConnectionDialog(context);
+      return;
+    }
+
     setState(() => _isFinding = true);
+
+    // 2️⃣ TAMPILKAN LOADING (SAMA KAYAK ON/OFF)
+    showLoadingDialog(context, message: l10n.loadingFindingVehicle);
+
     try {
-      final ok = await _rentalService.findEmotor();
+      // 3️⃣ PANGGIL API FIND
+      final ok = await _rentalService.findEmotor().timeout(
+        const Duration(seconds: 10),
+      );
+
       if (!mounted) return;
-      if (!mounted) return;
+
+      // 4️⃣ TUTUP LOADING
+      hideLoadingDialog(context);
+
       final l10n = AppLocalizations.of(context);
+
+      // 5️⃣ JIKA BERHASIL → TAMPILKAN POPUP FIND YANG SEKARANG
       if (ok) {
         showDialog<void>(
           context: context,
@@ -469,9 +550,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       } else {
         _showSnack(l10n.findEmotorFailed);
       }
-    } catch (e) {
+    }
+    // 6️⃣ TIMEOUT / SINYAL JELEK
+    on TimeoutException {
       if (!mounted) return;
-      _showSnack('${AppLocalizations.of(context).findEmotorFailed} $e');
+      hideLoadingDialog(context);
+      await showFindNoConnectionDialog(context);
+    }
+    // 7️⃣ ERROR LAIN
+    catch (e) {
+      if (!mounted) return;
+      hideLoadingDialog(context);
+      _showSnack(l10n.findEmotorFailed);
     } finally {
       if (mounted) {
         setState(() => _isFinding = false);
@@ -508,6 +598,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _handleStartRide() async {
+    final l10n = AppLocalizations.of(context);
     if (_isStartingRide) return;
     setState(() => _isStartingRide = true);
     try {
@@ -523,7 +614,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _ensureTimer();
       _startStatusListener();
     } catch (e) {
-      _showSnack('${AppLocalizations.of(context).startRideFailed}$e');
+      _showSnack('${l10n.startRideFailed}$e');
     } finally {
       if (mounted) {
         setState(() => _isStartingRide = false);
@@ -531,8 +622,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<bool?> showEndRentalConfirmDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 56,
+                  width: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFA45B),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33FFA45B),
+                        blurRadius: 14,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.stop_circle_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.endRentalConfirmTitle,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.endRentalConfirmBody,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: Text(l10n.endRentalConfirmNo),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFA45B),
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: Text(l10n.endRentalConfirmYes),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleEndRental() async {
+    final l10n = AppLocalizations.of(context);
     if (_isEnding) return;
+
     final status = _status;
     if (_isActive || (status?.hasMotorState == true && status!.motorOn)) {
       await EndRentalNoticeDialog.show(
@@ -541,19 +720,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
+
+    // 1️⃣ KONFIRMASI DULU
+    final confirmed = await showEndRentalConfirmDialog(context);
+    if (confirmed != true) return;
+
     setState(() => _isEnding = true);
+
+    // 2️⃣ TAMPILKAN LOADING
+    showLoadingDialog(context, message: l10n.loadingEndingRental);
+
     try {
+      // 3️⃣ END RENTAL
       final endedRideId = await _endRentalWithRetry();
+
       if (!mounted || endedRideId == null) return;
+
+      hideLoadingDialog(context);
+
       _statusSub?.cancel();
       _timer?.cancel();
+
       final history = await HistoryService().fetchHistoryById(endedRideId);
+
       if (!mounted) return;
+
       if (history.isEmpty) {
-        _showSnack('Detail history tidak ditemukan.');
+        _showSnack(l10n.errorHistoryNotFound);
         return;
       }
+
       final entry = history.first;
+
       final item = HistoryItem(
         id: entry.id,
         date: entry.date,
@@ -570,6 +768,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         idleCost: entry.idleCost,
         totalCost: entry.totalCost,
       );
+
       setState(() {
         _rental = null;
         _status = null;
@@ -577,13 +776,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _requireStart = true;
         _elapsedSeconds = 0;
       });
+
       SessionManager.instance.clearRental();
       SessionManager.instance.setRentalStartedAt(null);
+
       Navigator.of(context).push(
         appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
       );
     } catch (e) {
-      _showSnack('${AppLocalizations.of(context).endRentalFailed}$e');
+      hideLoadingDialog(context);
+      _showSnack('${l10n.endRentalFailed}$e');
     } finally {
       if (mounted) {
         setState(() => _isEnding = false);
@@ -604,6 +806,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
     return null;
+  }
+
+  Future<bool?> showTurnOffConfirmDialog(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final l10n = AppLocalizations.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 56,
+                  width: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFA45B),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33FFA45B),
+                        blurRadius: 14,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.power_settings_new_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.turnOffConfirmTitle, // atau hardcode
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.turnOffConfirmBody,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          side: const BorderSide(color: Color(0xFFE0E6F1)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          l10n.cancel,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFA45B),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          l10n.turnOff,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -628,10 +942,7 @@ class _Background extends StatelessWidget {
 }
 
 class _StartRideOverlay extends StatelessWidget {
-  const _StartRideOverlay({
-    required this.isLoading,
-    required this.onStart,
-  });
+  const _StartRideOverlay({required this.isLoading, required this.onStart});
 
   final bool isLoading;
   final VoidCallback onStart;
@@ -740,8 +1051,9 @@ class _ScooterHero extends StatelessWidget {
                 color: const Color(0xFFE7F1FF),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2C7BFE)
-                        .withValues(alpha: isActive ? 0.16 : 0.08),
+                    color: const Color(
+                      0xFF2C7BFE,
+                    ).withValues(alpha: isActive ? 0.16 : 0.08),
                     blurRadius: 26,
                     spreadRadius: 5,
                     offset: const Offset(0, 8),
@@ -795,7 +1107,7 @@ class _PlateBadge extends StatelessWidget {
                   color: Colors.black.withValues(alpha: muted ? 0.04 : 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
-                )
+                ),
               ],
             ),
             child: Icon(
@@ -901,8 +1213,8 @@ class _GridCards extends StatelessWidget {
                   value: hasRental
                       ? _formatDuration(elapsedSeconds)
                       : (rentalTime == 0
-                          ? '--'
-                          : '$rentalTime ${l10n.durationMinute}'),
+                            ? '--'
+                            : '$rentalTime ${l10n.durationMinute}'),
                   icon: Icons.timer_rounded,
                   labelStyle: label,
                   valueStyle: value,
@@ -1010,10 +1322,7 @@ class _InfoTile extends StatelessWidget {
                   ],
                 ),
               if (rightIcon)
-                Text(
-                  label,
-                  style: labelStyle.copyWith(color: fgColor),
-                ),
+                Text(label, style: labelStyle.copyWith(color: fgColor)),
             ],
           ),
         ),
@@ -1049,18 +1358,12 @@ class _RentalTimeTile extends StatelessWidget {
         ? const LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [
-              Color(0xFF1E6DFF),
-              Color(0xFF3F8CFF),
-            ],
+            colors: [Color(0xFF1E6DFF), Color(0xFF3F8CFF)],
           )
         : const LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [
-              Color(0xFFE5ECF7),
-              Color(0xFFF4F7FB),
-            ],
+            colors: [Color(0xFFE5ECF7), Color(0xFFF4F7FB)],
           );
     return Opacity(
       opacity: dimmed ? 0.55 : 1,
@@ -1107,8 +1410,10 @@ class _RentalTimeTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 6),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
@@ -1174,7 +1479,11 @@ class _EndRentalTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.stop_circle_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.stop_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1286,7 +1595,9 @@ class _PowerButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(14),
-            border: active ? null : Border.all(color: color.withValues(alpha: 0.3)),
+            border: active
+                ? null
+                : Border.all(color: color.withValues(alpha: 0.3)),
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: active ? 0.28 : 0.12),
