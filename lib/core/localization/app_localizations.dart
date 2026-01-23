@@ -122,6 +122,9 @@ class AppLocalizations {
       'weight': 'Weight',
       'logout': 'Log Out',
       'logout_confirm': 'Are you sure want to log out?',
+      'logout_blocked_title': 'Logout is paused',
+      'logout_blocked_body':
+          'Please end your rental first, then you can log out safely.',
       'no': 'No',
       'yes': 'Yes',
       'skip': 'Skip',
@@ -258,6 +261,9 @@ class AppLocalizations {
       'weight': 'Berat',
       'logout': 'Keluar',
       'logout_confirm': 'Yakin ingin keluar?',
+      'logout_blocked_title': 'Logout ditunda dulu',
+      'logout_blocked_body':
+          'Mohon end rental dulu sebelum logout, ya.',
       'no': 'Tidak',
       'yes': 'Ya',
       'skip': 'Lewati',
@@ -390,6 +396,8 @@ class AppLocalizations {
   String get weight => _t('weight');
   String get logout => _t('logout');
   String get logoutConfirm => _t('logout_confirm');
+  String get logoutBlockedTitle => _t('logout_blocked_title');
+  String get logoutBlockedBody => _t('logout_blocked_body');
   String get no => _t('no');
   String get yes => _t('yes');
   String get skip => _t('skip');
