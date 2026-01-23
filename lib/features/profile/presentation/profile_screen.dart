@@ -6,6 +6,7 @@ import '../../history/presentation/history_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../components/bottom_nav.dart';
+import '../../../components/active_rental_logout_dialog.dart';
 import '../../../components/logout_dialog.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -407,9 +408,21 @@ Future<void> _showLogoutDialog(BuildContext context) {
   );
 }
 
+Future<void> _showActiveRentalLogoutDialog(BuildContext context) {
+  return showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => const ActiveRentalLogoutDialog(),
+  );
+}
+
 void _handleTap(BuildContext context, _ProfileEntry entry) {
   if (entry.isLogout) {
-    _showLogoutDialog(context);
+    if (SessionManager.instance.rental != null) {
+      _showActiveRentalLogoutDialog(context);
+    } else {
+      _showLogoutDialog(context);
+    }
   } else {
     // Non-editable fields are shown only; editable ones use header pencil.
   }
