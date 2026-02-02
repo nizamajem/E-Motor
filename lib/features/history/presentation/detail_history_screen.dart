@@ -266,109 +266,109 @@ class DetailHistoryScreen extends StatelessWidget {
                                             rating: rating,
                                             feedback: text,
                                           );
-                                          if (context.mounted) {
-                                            Navigator.of(ctx).pop();
-                                          }
-                                          if (context.mounted) {
-                                            showDialog<void>(
-                                              context: context,
-                                              builder: (dialogContext) {
-                                                final dialogL10n =
-                                                    AppLocalizations.of(dialogContext);
-                                                return Dialog(
-                                                  insetPadding:
-                                                      const EdgeInsets.symmetric(horizontal: 22),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(18),
-                                                  ),
-                                                  child: Padding(
-                                                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                                                    child: Column(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Container(
-                                                          height: 56,
-                                                          width: 56,
-                                                          decoration: BoxDecoration(
-                                                            shape: BoxShape.circle,
-                                                            color: const Color(0xFF2C7BFE),
-                                                            boxShadow: const [
-                                                              BoxShadow(
-                                                                color: Color(0x332C7BFE),
-                                                                blurRadius: 14,
-                                                                offset: Offset(0, 6),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          child: const Icon(
-                                                            Icons.check_rounded,
-                                                            color: Colors.white,
-                                                            size: 30,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 12),
-                                                        Text(
-                                                          dialogL10n.feedbackSuccessTitle,
-                                                          textAlign: TextAlign.center,
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 15,
-                                                            fontWeight: FontWeight.w800,
-                                                            color: Colors.black87,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 6),
-                                                        Text(
-                                                          dialogL10n.feedbackSuccessBody,
-                                                          textAlign: TextAlign.center,
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 12.5,
-                                                            fontWeight: FontWeight.w500,
-                                                            color: Colors.grey.shade600,
-                                                            height: 1.4,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 14),
-                                                        SizedBox(
-                                                          width: double.infinity,
-                                                          child: ElevatedButton(
-                                                            onPressed: () =>
-                                                                Navigator.of(dialogContext).pop(),
-                                                            style: ElevatedButton.styleFrom(
-                                                              padding: const EdgeInsets.symmetric(
-                                                                  vertical: 11),
-                                                              backgroundColor: const Color(0xFF2C7BFE),
-                                                              shape: RoundedRectangleBorder(
-                                                                borderRadius: BorderRadius.circular(12),
-                                                              ),
-                                                              elevation: 0,
+                                          if (!ctx.mounted) return;
+                                          Navigator.of(ctx).pop();
+                                          if (!context.mounted) return;
+                                          showDialog<void>(
+                                            context: context,
+                                            builder: (dialogContext) {
+                                              final dialogL10n =
+                                                  AppLocalizations.of(dialogContext);
+                                              return Dialog(
+                                                insetPadding:
+                                                    const EdgeInsets.symmetric(horizontal: 22),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(18),
+                                                ),
+                                                child: Padding(
+                                                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        height: 56,
+                                                        width: 56,
+                                                        decoration: BoxDecoration(
+                                                          shape: BoxShape.circle,
+                                                          color: const Color(0xFF2C7BFE),
+                                                          boxShadow: const [
+                                                            BoxShadow(
+                                                              color: Color(0x332C7BFE),
+                                                              blurRadius: 14,
+                                                              offset: Offset(0, 6),
                                                             ),
-                                                            child: Text(
-                                                              dialogL10n.feedbackSuccessCta,
-                                                              style: GoogleFonts.poppins(
-                                                                fontSize: 13,
-                                                                fontWeight: FontWeight.w700,
-                                                                color: Colors.white,
-                                                              ),
+                                                          ],
+                                                        ),
+                                                        child: const Icon(
+                                                          Icons.check_rounded,
+                                                          color: Colors.white,
+                                                          size: 30,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 12),
+                                                      Text(
+                                                        dialogL10n.feedbackSuccessTitle,
+                                                        textAlign: TextAlign.center,
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Text(
+                                                        dialogL10n.feedbackSuccessBody,
+                                                        textAlign: TextAlign.center,
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 12.5,
+                                                          fontWeight: FontWeight.w500,
+                                                          color: Colors.grey.shade600,
+                                                          height: 1.4,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 14),
+                                                      SizedBox(
+                                                        width: double.infinity,
+                                                        child: ElevatedButton(
+                                                          onPressed: () =>
+                                                              Navigator.of(dialogContext).pop(),
+                                                          style: ElevatedButton.styleFrom(
+                                                            padding: const EdgeInsets.symmetric(
+                                                                vertical: 11),
+                                                            backgroundColor: const Color(0xFF2C7BFE),
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius: BorderRadius.circular(12),
+                                                            ),
+                                                            elevation: 0,
+                                                          ),
+                                                          child: Text(
+                                                            dialogL10n.feedbackSuccessCta,
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 13,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: Colors.white,
                                                             ),
                                                           ),
                                                         ),
-                                                      ],
-                                                    ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                );
-                                              },
-                                            );
-                                          }
+                                                ),
+                                              );
+                                            },
+                                          );
                                         } on ApiException catch (e) {
+                                          if (!ctx.mounted) return;
                                           ScaffoldMessenger.of(ctx).showSnackBar(
                                             SnackBar(content: Text(e.message)),
                                           );
                                         } catch (e) {
+                                          if (!ctx.mounted) return;
                                           ScaffoldMessenger.of(ctx).showSnackBar(
                                             SnackBar(content: Text(e.toString())),
                                           );
                                         } finally {
-                                          if (context.mounted) {
+                                          if (ctx.mounted) {
                                             setState(() => isSending = false);
                                           }
                                         }

@@ -157,7 +157,9 @@ class AppLocalizations {
       'error_vehicle_not_responding':
           'Connection is slow. The vehicle is not responding.',
       'error_network_generic': 'Network error occurred. Please try again.',
+      'error_session_expired': 'Session expired. Please login again.',
       'error_history_not_found': 'Trip details not found.',
+      'rental_ended_remote': 'Rental has been ended from backend.',
       'end_rental_confirm_title': 'End Rental?',
       'end_rental_confirm_body':
           'Make sure the vehicle is turned off and parked properly before ending the rental.',
@@ -294,7 +296,9 @@ class AppLocalizations {
       'error_vehicle_not_responding':
           'Koneksi lambat. Kendaraan tidak merespons.',
       'error_network_generic': 'Terjadi gangguan jaringan. Silakan coba lagi.',
+      'error_session_expired': 'Sesi berakhir. Silakan login ulang.',
       'error_history_not_found': 'Detail history tidak ditemukan.',
+      'rental_ended_remote': 'Rental sudah diakhiri dari backend.',
       'no_internet_description':
           'Periksa jaringan Anda.\nAplikasi akan otomatis melanjutkan saat koneksi tersedia.',
       'end_rental_confirm_title': 'End Rental?',
@@ -422,7 +426,9 @@ class AppLocalizations {
   String get errorSendCommandFailed => _t('error_send_command_failed');
   String get errorVehicleNotResponding => _t('error_vehicle_not_responding');
   String get errorNetworkGeneric => _t('error_network_generic');
+  String get errorSessionExpired => _t('error_session_expired');
   String get errorHistoryNotFound => _t('error_history_not_found');
+  String get rentalEndedRemote => _t('rental_ended_remote');
   String get noInternetConnection => _t('no_internet_connection');
   String get noInternetDescription => _t('no_internet_description');
   String get endRentalConfirmTitle => _t('end_rental_confirm_title');

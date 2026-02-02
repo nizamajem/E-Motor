@@ -86,7 +86,7 @@ class _CardHero extends StatelessWidget {
                 color: const Color(0xFFE7F1FF),
                 boxShadow: [
                   BoxShadow(
-                    color: slide.primary.withOpacity(0.12),
+                    color: slide.primary.withValues(alpha: 0.12),
                     blurRadius: 28,
                     spreadRadius: 5,
                     offset: const Offset(0, 8),
@@ -103,7 +103,7 @@ class _CardHero extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: slide.primary.withOpacity(0.12),
+                  color: slide.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(

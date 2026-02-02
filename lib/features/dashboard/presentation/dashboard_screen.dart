@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +10,7 @@ import '../../../core/network/network_utils.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../history/data/history_service.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../auth/presentation/login_screen.dart';
 import '../../rental/data/rental_service.dart';
 import '../../history/presentation/detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
@@ -29,7 +29,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   bool _isActive = false;
   bool _isToggling = false;
   bool _isEnding = false;
@@ -47,10 +48,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   bool _noInternetDialogShown = false;
+  bool _resumeInProgress = false;
+  bool _authExpiredHandled = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _listenInternetConnection();
 
     _rental = widget.initialRental ?? SessionManager.instance.rental;
@@ -74,11 +78,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectivitySub?.cancel();
 
     _statusSub?.cancel();
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _handleResume();
+    }
+  }
+
+  Future<void> _handleResume() async {
+    if (_resumeInProgress) return;
+    _resumeInProgress = true;
+    try {
+      await SessionManager.instance.loadFromStorage();
+      if (!mounted) return;
+
+      final storedRental = SessionManager.instance.rental;
+      if (storedRental != null) {
+        setState(() {
+          _rental ??= storedRental;
+          _isActive = _rental?.motorOn ?? _isActive;
+          _hasRental = true;
+          _requireStart = false;
+          final startedAt = SessionManager.instance.rentalStartedAt;
+          if (startedAt != null) {
+            final diff = DateTime.now().difference(startedAt);
+            if (!diff.isNegative) {
+              _elapsedSeconds = diff.inSeconds;
+            }
+          }
+        });
+        _ensureTimer();
+        _statusSub?.cancel();
+        _refreshStatusOnce();
+        _startStatusListener();
+      }
+    } finally {
+      _resumeInProgress = false;
+    }
   }
 
   void _listenInternetConnection() {
@@ -104,6 +148,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (SessionManager.instance.token == null) return;
     _statusSub = _rentalService.statusStream().listen((data) {
       if (!mounted) return;
+      if (data.isEnded && _shouldAcceptRemoteEnd(data)) {
+        _handleRemoteEnd();
+        return;
+      }
       setState(() {
         _status = data;
         if (data.hasMotorState) {
@@ -117,7 +165,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_hasRental) {
         _ensureTimer();
       }
-    }, onError: (_) {});
+    }, onError: (error) {
+      if (!mounted) return;
+      if (error is ApiException &&
+          (error.statusCode == 404 || error.statusCode == 410)) {
+        _handleRemoteEnd();
+      } else if (error is ApiException &&
+          (error.statusCode == 401 || error.statusCode == 403)) {
+        _handleAuthExpired();
+      }
+    });
   }
 
   Future<void> _refreshStatusOnce() async {
@@ -125,6 +182,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final data = await _rentalService.fetchStatus();
       if (!mounted) return;
+      if (data.isEnded && _shouldAcceptRemoteEnd(data)) {
+        _handleRemoteEnd();
+        return;
+      }
       setState(() {
         _status = data;
         if (data.hasMotorState) {
@@ -146,7 +207,136 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
         _hasRental = true;
       });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 404 || e.statusCode == 410) {
+        _handleRemoteEnd();
+      } else if (e.statusCode == 401 || e.statusCode == 403) {
+        _handleAuthExpired();
+      }
     } catch (_) {}
+  }
+
+  void _handleRemoteEnd() {
+    if (!_hasRental) return;
+    _statusSub?.cancel();
+    _timer?.cancel();
+    setState(() {
+      _status = null;
+      _rental = null;
+      _hasRental = false;
+      _requireStart = true;
+      _isActive = false;
+      _elapsedSeconds = 0;
+    });
+    SessionManager.instance.clearRental();
+    SessionManager.instance.setRentalStartedAt(null);
+    _showSnack(AppLocalizations.of(context).rentalEndedRemote);
+  }
+
+  bool _shouldAcceptRemoteEnd(RideStatus data) {
+    final localStart = SessionManager.instance.rentalStartedAt;
+    final remoteStart = data.startedAt;
+    if (localStart == null || remoteStart == null) return true;
+    final deltaMinutes = localStart.difference(remoteStart).inMinutes.abs();
+    return deltaMinutes <= 10;
+  }
+
+  Future<void> _handleAuthExpired() async {
+    if (!mounted || _authExpiredHandled) return;
+    _authExpiredHandled = true;
+    _statusSub?.cancel();
+    _timer?.cancel();
+    if (mounted) {
+      setState(() {
+        _isToggling = false;
+        _isEnding = false;
+        _isStartingRide = false;
+        _isFinding = false;
+      });
+    }
+    SessionManager.instance.clear();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final dialogL10n = AppLocalizations.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 56,
+                  width: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF2C7BFE),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x332C7BFE),
+                        blurRadius: 14,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.lock_clock_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  dialogL10n.errorSessionExpired,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      dialogL10n.signIn,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      appRoute(const LoginScreen(), direction: AxisDirection.right),
+      (route) => false,
+    );
   }
 
   bool _shouldSyncElapsed(int serverSeconds) {
@@ -158,9 +348,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final delta = (serverSeconds - expected).abs();
       return delta <= 30;
     }
-    if (_elapsedSeconds == 0) {
-      return serverSeconds < 24 * 3600;
-    }
+    if (_elapsedSeconds == 0) return true;
     if (serverSeconds < _elapsedSeconds) return false;
     return (serverSeconds - _elapsedSeconds) <= 60;
   }
@@ -356,11 +544,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (!value) {
       final confirmed = await showTurnOffConfirmDialog(context);
+      if (!mounted) return;
       if (confirmed != true) return;
     }
 
     // 1️⃣ CEK INTERNET DULU
     final hasInternet = await hasInternetConnection();
+    if (!mounted) return;
     if (!hasInternet) {
       _showSnack(l10n.errorNoInternet);
       return;
@@ -408,17 +598,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _showSnack(l10n.errorSendCommandFailed);
       }
     }
-    // 3️⃣ TIMEOUT (SINYAL JELEK / IOT TIDAK RESPON)
+    // 3️⃣ AUTH EXPIRED
+    on ApiException catch (e) {
+      if (!mounted) return;
+      hideLoadingDialog(context);
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        _handleAuthExpired();
+      } else {
+        _showSnack(l10n.errorNetworkGeneric);
+      }
+    }
+    // 4️⃣ TIMEOUT (SINYAL JELEK / IOT TIDAK RESPON)
     on TimeoutException {
+      if (!mounted) return;
       hideLoadingDialog(context);
       _showSnack(l10n.errorVehicleNotResponding);
     }
-    // 4️⃣ ERROR LAIN (API / IOT)
+    // 5️⃣ ERROR LAIN (API / IOT)
     catch (e) {
-      if (mounted) {
-        hideLoadingDialog(context);
-        _showSnack(l10n.errorNetworkGeneric);
-      }
+      if (!mounted) return;
+      hideLoadingDialog(context);
+      _showSnack(l10n.errorNetworkGeneric);
     } finally {
       if (mounted) {
         setState(() => _isToggling = false);
@@ -432,13 +632,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _handleFind(BuildContext context) async {
+  Future<void> _handleFind() async {
     final l10n = AppLocalizations.of(context);
     if (_isFinding) return;
 
     // 1️⃣ CEK INTERNET AWAL
-    final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity == ConnectivityResult.none) {
+    final hasInternet = await hasInternetConnection();
+    if (!mounted) return;
+    if (!hasInternet) {
       await showFindNoConnectionDialog(context);
       return;
     }
@@ -458,8 +659,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // 4️⃣ TUTUP LOADING
       hideLoadingDialog(context);
-
-      final l10n = AppLocalizations.of(context);
 
       // 5️⃣ JIKA BERHASIL → TAMPILKAN POPUP FIND YANG SEKARANG
       if (ok) {
@@ -558,7 +757,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await showFindNoConnectionDialog(context);
     }
     // 7️⃣ ERROR LAIN
-    catch (e) {
+    on ApiException catch (e) {
+      if (!mounted) return;
+      hideLoadingDialog(context);
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        _handleAuthExpired();
+      } else {
+        _showSnack(l10n.findEmotorFailed);
+      }
+    } catch (e) {
       if (!mounted) return;
       hideLoadingDialog(context);
       _showSnack(l10n.findEmotorFailed);
@@ -587,16 +794,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  String _formatDuration(int seconds) {
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    final secs = seconds % 60;
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-  }
-
   Future<void> _handleStartRide() async {
     final l10n = AppLocalizations.of(context);
     if (_isStartingRide) return;
@@ -613,7 +810,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       SessionManager.instance.setRentalStartedAt(DateTime.now());
       _ensureTimer();
       _startStatusListener();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        _handleAuthExpired();
+      } else {
+        _showSnack('${l10n.startRideFailed}$e');
+      }
     } catch (e) {
+      if (!mounted) return;
       _showSnack('${l10n.startRideFailed}$e');
     } finally {
       if (mounted) {
@@ -718,11 +923,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         type: EndRentalNoticeType.turnOffRequired,
       );
+      if (!mounted) return;
       return;
     }
 
     // 1️⃣ KONFIRMASI DULU
     final confirmed = await showEndRentalConfirmDialog(context);
+    if (!mounted) return;
     if (confirmed != true) return;
 
     setState(() => _isEnding = true);
@@ -734,7 +941,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // 3️⃣ END RENTAL
       final endedRideId = await _endRentalWithRetry();
 
-      if (!mounted || endedRideId == null) return;
+      if (!mounted) return;
+      if (endedRideId == null) {
+        hideLoadingDialog(context);
+        _showSnack(l10n.endRentalFailed);
+        return;
+      }
 
       hideLoadingDialog(context);
 
@@ -746,6 +958,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
 
       if (history.isEmpty) {
+        _statusSub?.cancel();
+        _timer?.cancel();
+        setState(() {
+          _rental = null;
+          _status = null;
+          _hasRental = false;
+          _requireStart = true;
+          _elapsedSeconds = 0;
+          _isActive = false;
+        });
+        SessionManager.instance.clearRental();
+        SessionManager.instance.setRentalStartedAt(null);
         _showSnack(l10n.errorHistoryNotFound);
         return;
       }
@@ -783,7 +1007,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Navigator.of(context).push(
         appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      hideLoadingDialog(context);
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        _handleAuthExpired();
+      } else if (e.statusCode == 404 || e.statusCode == 410) {
+        _handleRemoteEnd();
+      } else {
+        _showSnack('${l10n.endRentalFailed}$e');
+      }
     } catch (e) {
+      if (!mounted) return;
       hideLoadingDialog(context);
       _showSnack('${l10n.endRentalFailed}$e');
     } finally {
@@ -794,11 +1029,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<String?> _endRentalWithRetry() async {
-    while (mounted) {
+    const maxAttempts = 4;
+    var attempt = 0;
+    while (mounted && attempt < maxAttempts) {
       try {
         return await _rentalService.endRental();
       } on ApiException catch (e) {
         if (e.statusCode == 400) {
+          attempt += 1;
           await Future<void>.delayed(const Duration(seconds: 3));
           continue;
         }
@@ -1085,7 +1323,6 @@ class _PlateBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = !isActive;
-    final l10n = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1158,7 +1395,7 @@ class _GridCards extends StatelessWidget {
   final int elapsedSeconds;
   final bool hasRental;
   final VoidCallback onEnd;
-  final ValueChanged<BuildContext> onFind;
+  final VoidCallback onFind;
   final RideStatus? status;
   final RentalSession? rental;
 
@@ -1233,7 +1470,7 @@ class _GridCards extends StatelessWidget {
                   rightIcon: true,
                   outlined: true,
                   dimmed: false, // Ping stays vivid
-                  onTap: isFinding ? null : () => onFind(context),
+                  onTap: isFinding ? null : onFind,
                 ),
               ),
             ],
