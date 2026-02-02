@@ -1,6 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 Future<bool> hasInternetConnection() async {
-  final result = await Connectivity().checkConnectivity();
-  return result != ConnectivityResult.none;
+  final results = await Connectivity().checkConnectivity();
+  return results.isNotEmpty && !results.contains(ConnectivityResult.none);
 }

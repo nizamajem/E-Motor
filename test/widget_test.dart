@@ -8,7 +8,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:e_motor/app.dart';
+import 'package:reflow_emotor/app.dart';
 
 void main() {
   testWidgets('Onboarding shows slides and CTA changes on last page',

@@ -31,6 +31,8 @@ class RentalSession {
   factory RentalSession.fromJson(Map<String, dynamic> json) {
     final rideId = json['rideHistoryId']?.toString() ??
         json['ride_history_id']?.toString() ??
+        json['ride_id']?.toString() ??
+        json['rideId']?.toString() ??
         json['id']?.toString() ??
         '';
     return RentalSession(

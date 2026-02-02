@@ -13,9 +13,10 @@ class ApiConfig {
   );
 
   /// Login session lifetime in seconds, sent as "detik".
+  /// Set to 0 to omit and let backend use its default (e.g., unlimited).
   static const int loginSessionSeconds = int.fromEnvironment(
     'LOGIN_SESSION_SECONDS',
-    defaultValue: 3600,
+    defaultValue: 0,
   );
 
   /// Paths grouped here to keep usage consistent across the app.

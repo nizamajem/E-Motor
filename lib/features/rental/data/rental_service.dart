@@ -17,6 +17,9 @@ class RideStatus {
     required this.carbonEmissions,
     required this.calories,
     required this.hasMotorState,
+    required this.isEnded,
+    this.startedAt,
+    this.endedAt,
     this.plate,
     this.batteryPercent,
   });
@@ -52,6 +55,28 @@ class RideStatus {
     if (rawRideSeconds != null && rideSeconds > 100000) {
       rideSeconds = rideSeconds / 1000;
     }
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      if (text.isEmpty) return null;
+      return DateTime.tryParse(text);
+    }
+    final startAt = parseDate(
+      merged['start_position_time'] ??
+          merged['start_date_time'] ??
+          merged['start_time'],
+    );
+    final endAt = parseDate(
+      merged['end_position_time'] ??
+          merged['end_date_time'] ??
+          merged['end_time'],
+    );
+    final isEnded = merged['is_end'] == true ||
+        merged['isEnded'] == true ||
+        merged['ended'] == true ||
+        merged['ride_ended'] == true ||
+        merged['finish'] == true;
+
     final carbon = toDouble(
       merged['carbon_emissions'] ??
           merged['carbon_reduction'] ??
@@ -92,6 +117,9 @@ class RideStatus {
       carbonEmissions: carbon,
       calories: calories,
       hasMotorState: hasMotorState,
+      isEnded: isEnded,
+      startedAt: startAt,
+      endedAt: endAt,
       plate: plate?.toString(),
       batteryPercent: power == null ? null : toDouble(power),
     );
@@ -106,6 +134,9 @@ class RideStatus {
   final double carbonEmissions;
   final double calories;
   final bool hasMotorState;
+  final bool isEnded;
+  final DateTime? startedAt;
+  final DateTime? endedAt;
   final String? plate;
   final double? batteryPercent;
 }
@@ -150,13 +181,15 @@ class RentalService {
     required String username,
     required String password,
   }) async {
+    final body = <String, dynamic>{
+      'username': username,
+      'password': password,
+      if (ApiConfig.loginSessionSeconds > 0)
+        'detik': ApiConfig.loginSessionSeconds,
+    };
     final res = await _client.postJson(
       ApiConfig.loginPath,
-      body: {
-        'username': username,
-        'password': password,
-        'detik': ApiConfig.loginSessionSeconds,
-      },
+      body: body,
     );
     debugPrint('login response: $res');
 
