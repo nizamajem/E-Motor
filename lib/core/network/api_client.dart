@@ -50,6 +50,10 @@ class ApiClient {
   }
 
   Map<String, dynamic> _decode(http.Response response) {
+    final refreshToken = response.headers['x-refresh-token'];
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      SessionManager.instance.saveToken(refreshToken);
+    }
     final status = response.statusCode;
     final raw = response.body.isEmpty ? '{}' : response.body;
     final decoded = jsonDecode(raw);

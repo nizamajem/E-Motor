@@ -165,6 +165,26 @@ class SessionManager {
     }
   }
 
+  Future<void> saveToken(String token) async {
+    if (token.isEmpty) return;
+    final current = _user;
+    _user = UserSession(
+      token: token,
+      name: current?.name ?? '',
+      email: current?.email ?? '',
+      userId: current?.userId,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyToken, token);
+    if (current != null) {
+      await prefs.setString(_keyName, current.name);
+      await prefs.setString(_keyEmail, current.email);
+      if (current.userId != null && current.userId!.isNotEmpty) {
+        await prefs.setString(_keyUserId, current.userId!);
+      }
+    }
+  }
+
   void saveRental(RentalSession session) {
     _rental = session;
     _emotorId ??= session.emotorId;
