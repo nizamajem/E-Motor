@@ -235,10 +235,13 @@ class _LoginScreenState extends State<LoginScreen> {
       await _rentalService.login(username: username, password: password);
       // Fetch e-motor bound to this user if not provided via dart-define.
       await _ensureEmotorId();
+      final restored = await _rentalService.restoreActiveRental();
       debugPrint('login screen sessionEmotorId=${SessionManager.instance.emotorId}');
       if (!mounted) return;
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(appRoute(const DashboardScreen()));
+      Navigator.of(context).pushReplacement(
+        appRoute(DashboardScreen(initialRental: restored)),
+      );
     } catch (e) {
       _showSnack(e.toString());
     } finally {

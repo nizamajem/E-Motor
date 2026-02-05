@@ -12,6 +12,7 @@ class HistoryEntry {
     required this.distanceKmValue,
     required this.carbonEmissionsValue,
     required this.startDate,
+    required this.endDate,
     required this.startTime,
     required this.endTime,
     required this.startPlace,
@@ -19,6 +20,9 @@ class HistoryEntry {
     required this.rideCost,
     required this.idleCost,
     required this.totalCost,
+    required this.statusRaw,
+    required this.isEnded,
+    required this.rideSecondsValue,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) {
@@ -142,6 +146,19 @@ class HistoryEntry {
             json['ride_time'],
       ),
     );
+    final statusRaw = toText(
+      json['status'] ??
+          json['ride_status'] ??
+          json['bike_status'] ??
+          json['rental_status'] ??
+          bike?['status'] ??
+          emotor?['status'],
+    );
+    final isEnded = json['is_end'] == true ||
+        json['isEnded'] == true ||
+        json['ended'] == true ||
+        json['finish'] == true ||
+        json['ride_ended'] == true;
     final amountPaid = json['amount_paid'];
     final pauseAmount = json['pause_amount'];
     final startLat = json['start_position_latitude'];
@@ -202,6 +219,7 @@ class HistoryEntry {
       distanceKmValue: distanceMeters == 0 ? 0 : distanceMeters / 1000,
       carbonEmissionsValue: carbonEmissions,
       startDate: startAt,
+      endDate: endAt,
       startTime: formatTime(startAt),
       endTime: formatTime(endAt),
       startPlace: startPlace,
@@ -209,6 +227,9 @@ class HistoryEntry {
       rideCost: formatCurrency(amountPaid),
       idleCost: pauseAmount == null ? '-' : formatCurrency(pauseAmount),
       totalCost: formatCurrency(amountPaid),
+      statusRaw: statusRaw,
+      isEnded: isEnded,
+      rideSecondsValue: rideSeconds,
     );
   }
 
@@ -222,6 +243,7 @@ class HistoryEntry {
   final double distanceKmValue;
   final double carbonEmissionsValue;
   final DateTime? startDate;
+  final DateTime? endDate;
   final String startTime;
   final String endTime;
   final String startPlace;
@@ -229,4 +251,24 @@ class HistoryEntry {
   final String rideCost;
   final String idleCost;
   final String totalCost;
+  final String? statusRaw;
+  final bool isEnded;
+  final double rideSecondsValue;
+
+  bool get isActive {
+    if (isEnded) return false;
+    final status = statusRaw?.toLowerCase().trim();
+    if (status != null && status.isNotEmpty) {
+      if (status.contains('running') ||
+          status.contains('in_use') ||
+          status.contains('in-use') ||
+          status.contains('using') ||
+          status.contains('active') ||
+          status.contains('on_ride')) {
+        return true;
+      }
+    }
+    if (startDate != null && endDate == null) return true;
+    return false;
+  }
 }

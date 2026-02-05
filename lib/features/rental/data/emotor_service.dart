@@ -7,6 +7,7 @@ class Emotor {
     required this.id,
     required this.plate,
     required this.userId,
+    this.status,
   });
 
   factory Emotor.fromJson(Map<String, dynamic> json) {
@@ -17,12 +18,27 @@ class Emotor {
           json['license_plate']?.toString() ??
           '-',
       userId: json['userId']?.toString() ?? json['user_id']?.toString() ?? '',
+      status: json['status']?.toString() ??
+          json['bike_status']?.toString() ??
+          json['rental_status']?.toString(),
     );
   }
 
   final String id;
   final String plate;
   final String userId;
+  final String? status;
+
+  bool get isInUse {
+    final value = status?.toLowerCase().trim();
+    if (value == null || value.isEmpty) return false;
+    return value.contains('in_use') ||
+        value.contains('in-use') ||
+        value.contains('using') ||
+        value.contains('running') ||
+        value.contains('active') ||
+        value.contains('on_ride');
+  }
 }
 
 class EmotorService {

@@ -71,8 +71,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     _ensureTimer();
     if (_hasRental) {
-      _refreshStatusOnce();
-      _startStatusListener();
+      if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
+        _refreshStatusOnce();
+        _startStatusListener();
+      }
+    } else {
+      _restoreActiveRentalIfNeeded();
     }
   }
 
@@ -101,7 +105,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (!mounted) return;
 
       final storedRental = SessionManager.instance.rental;
-      if (storedRental != null) {
+    if (storedRental != null) {
         setState(() {
           _rental ??= storedRental;
           _isActive = _rental?.motorOn ?? _isActive;
@@ -117,11 +121,37 @@ class _DashboardScreenState extends State<DashboardScreen>
         });
         _ensureTimer();
         _statusSub?.cancel();
-        _refreshStatusOnce();
-        _startStatusListener();
+        if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
+          _refreshStatusOnce();
+          _startStatusListener();
+        }
       }
     } finally {
       _resumeInProgress = false;
+    }
+  }
+
+  Future<void> _restoreActiveRentalIfNeeded() async {
+    if (!mounted || _hasRental) return;
+    if (SessionManager.instance.token == null) return;
+    final restored = await _rentalService.restoreActiveRental();
+    if (!mounted || restored == null) return;
+    setState(() {
+      _rental = restored;
+      _hasRental = true;
+      _requireStart = false;
+      final startedAt = SessionManager.instance.rentalStartedAt;
+      if (startedAt != null) {
+        final diff = DateTime.now().difference(startedAt);
+        if (!diff.isNegative) {
+          _elapsedSeconds = diff.inSeconds;
+        }
+      }
+    });
+    _ensureTimer();
+    if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
+      _refreshStatusOnce();
+      _startStatusListener();
     }
   }
 
@@ -255,7 +285,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         _isFinding = false;
       });
     }
-    SessionManager.instance.clear();
+    SessionManager.instance.clearAuth();
     if (!mounted) return;
     await showDialog<void>(
       context: context,

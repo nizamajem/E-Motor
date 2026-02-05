@@ -4,6 +4,9 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../history/data/history_service.dart';
+import '../../history/data/history_models.dart';
+import 'emotor_service.dart';
 import 'package:flutter/foundation.dart';
 
 class RideStatus {
@@ -515,5 +518,138 @@ class RentalService {
     await fetchStatusById(endedId);
     await waitStep();
     await logout();
+  }
+
+  Future<RentalSession?> restoreActiveRental() async {
+    if (SessionManager.instance.token == null) return null;
+    final existing = SessionManager.instance.rental;
+
+    final entries = await HistoryService().fetchHistory();
+    final activeEntries = entries.where((entry) => entry.isActive).toList();
+
+    String normalizePlate(String? value) {
+      if (value == null) return '';
+      return value.replaceAll(RegExp(r'\\s+'), '').toUpperCase();
+    }
+
+    final emotorProfile = SessionManager.instance.emotorProfile;
+    final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
+    var preferredPlate = normalizePlate(
+      emotorProfile?['vehicle_number']?.toString() ??
+          emotorProfile?['plate']?.toString() ??
+          emotorProfile?['license_plate']?.toString() ??
+          (emotorFromUser is Map<String, dynamic>
+              ? (emotorFromUser['vehicle_number']?.toString() ??
+                  emotorFromUser['plate']?.toString() ??
+                  emotorFromUser['license_plate']?.toString())
+              : null),
+    );
+    String? preferredEmotorId = emotorProfile?['id']?.toString().trim();
+    final userId = SessionManager.instance.user?.userId ??
+        SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+        SessionManager.instance.userProfile?['id']?.toString().trim();
+    Emotor? assigned;
+    if (userId != null && userId.isNotEmpty) {
+      assigned = await EmotorService().fetchAssignedToUser(userId);
+      if (assigned != null) {
+        preferredPlate = normalizePlate(assigned.plate);
+        preferredEmotorId = assigned.id;
+      }
+    }
+    debugPrint(
+      'restoreActiveRental: existingPlate=${existing?.plate} existingEmotorId=${existing?.emotorId} '
+      'assignedPlate=${assigned?.plate} assignedEmotorId=${assigned?.id} assignedStatus=${assigned?.status} '
+      'preferredPlate=$preferredPlate activeEntries=${activeEntries.length} totalHistory=${entries.length}',
+    );
+    if (existing != null) {
+      if (assigned != null) {
+        final normalizedExistingPlate = normalizePlate(existing.plate);
+        if (normalizedExistingPlate != preferredPlate ||
+            (preferredEmotorId != null &&
+                preferredEmotorId.isNotEmpty &&
+                existing.emotorId != preferredEmotorId)) {
+          final updated = RentalSession(
+            id: existing.id,
+            emotorId: preferredEmotorId ?? existing.emotorId,
+            plate: assigned.plate,
+            rangeKm: existing.rangeKm,
+            batteryPercent: existing.batteryPercent,
+            motorOn: existing.motorOn,
+            rideHistoryId: existing.rideHistoryId,
+          );
+          SessionManager.instance.saveRental(updated);
+          return updated;
+        }
+      }
+      return existing;
+    }
+
+    HistoryEntry? active;
+    if (activeEntries.isNotEmpty) {
+      if (preferredPlate.isNotEmpty) {
+        active = activeEntries.firstWhere(
+          (entry) => normalizePlate(entry.plate) == preferredPlate,
+          orElse: () => activeEntries.first,
+        );
+      } else {
+        active = activeEntries.first;
+      }
+    }
+    if (active == null && entries.isNotEmpty && preferredPlate.isNotEmpty) {
+      final matching = entries.where((entry) {
+        return normalizePlate(entry.plate) == preferredPlate;
+      }).toList();
+      matching.sort((a, b) {
+        final aDate = a.startDate ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.startDate ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bDate.compareTo(aDate);
+      });
+      if (matching.isNotEmpty) {
+        active = matching.first;
+      }
+    }
+    final emotorInUse = assigned?.isInUse == true;
+    if (active == null && !emotorInUse) return null;
+
+    final emotorIdFromProfile =
+        SessionManager.instance.emotorProfile?['id']?.toString().trim();
+    final emotorIdFromUser =
+        (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
+            ? (SessionManager.instance.userProfile?['emotor']
+                as Map<String, dynamic>)['id']
+                ?.toString()
+                .trim()
+            : null;
+    final emotorId = (preferredEmotorId != null && preferredEmotorId.isNotEmpty)
+        ? preferredEmotorId
+        : SessionManager.instance.emotorId ??
+            (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
+                ? emotorIdFromProfile
+                : null) ??
+            (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty
+                ? emotorIdFromUser
+                : null) ??
+            ApiConfig.emotorId;
+    if (emotorId.isEmpty) return null;
+
+    debugPrint(
+      'restoreActiveRental: selectedPlate=${active?.plate} selectedRideId=${active?.id} '
+      'resolvedEmotorId=$emotorId activeStart=${active?.startDate} activeEnd=${active?.endDate}',
+    );
+
+    final rental = RentalSession(
+      id: active?.id ?? emotorId,
+      emotorId: emotorId,
+      plate: active?.plate ?? (assigned?.plate ?? '-'),
+      rangeKm: 0,
+      batteryPercent: 0,
+      motorOn: false,
+      rideHistoryId: active?.id,
+    );
+    SessionManager.instance.saveRental(rental);
+    if (active?.startDate != null) {
+      SessionManager.instance.setRentalStartedAt(active!.startDate);
+    }
+    return rental;
   }
 }
