@@ -29,11 +29,11 @@ class ApiClient {
     Map<String, String>? query,
     bool auth = false,
   }) async {
-    final response = await _client.get(
-      _buildUri(path, query),
-      headers: _headers(withAuth: auth),
-    );
-    return _decode(response);
+    Future<http.Response> request() => _client.get(
+          _buildUri(path, query),
+          headers: _headers(withAuth: auth),
+        );
+    return _sendWithRefresh(request);
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -41,22 +41,58 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool auth = false,
   }) async {
-    final response = await _client.post(
-      _buildUri(path),
-      headers: _headers(withAuth: auth),
-      body: jsonEncode(body ?? {}),
-    );
+    Future<http.Response> request() => _client.post(
+          _buildUri(path),
+          headers: _headers(withAuth: auth),
+          body: jsonEncode(body ?? {}),
+        );
+    return _sendWithRefresh(request);
+  }
+
+  Future<Map<String, dynamic>> _sendWithRefresh(
+    Future<http.Response> Function() request,
+  ) async {
+    var response = await request();
+    if (_shouldRetryWithRefresh(response)) {
+      final refreshToken = _extractRefreshToken(response);
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await SessionManager.instance.saveToken(refreshToken);
+        response = await request();
+      }
+    }
     return _decode(response);
   }
 
+  bool _shouldRetryWithRefresh(http.Response response) {
+    final status = response.statusCode;
+    if (status != 401 && status != 403) return false;
+    return _extractRefreshToken(response)?.isNotEmpty == true;
+  }
+
+  String? _extractRefreshToken(http.Response response) {
+    return response.headers['x-refresh-token'] ??
+        response.headers['x-refresh_token'];
+  }
+
   Map<String, dynamic> _decode(http.Response response) {
-    final refreshToken = response.headers['x-refresh-token'];
+    final refreshToken = _extractRefreshToken(response);
     if (refreshToken != null && refreshToken.isNotEmpty) {
       SessionManager.instance.saveToken(refreshToken);
     }
     final status = response.statusCode;
     final raw = response.body.isEmpty ? '{}' : response.body;
-    final decoded = jsonDecode(raw);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      if (status >= 200 && status < 300) {
+        throw ApiException('Invalid server response.', statusCode: status);
+      }
+      throw ApiException(
+        raw.length > 160 ? raw.substring(0, 160) : raw,
+        statusCode: status,
+      );
+    }
     final data = decoded is Map<String, dynamic> ? decoded : {'data': decoded};
 
     if (status >= 200 && status < 300) return data;

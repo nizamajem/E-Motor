@@ -271,6 +271,13 @@ class SessionManager {
     unawaited(_clearStorage());
   }
 
+  void clearAuth() {
+    _user = null;
+    _userProfile = null;
+    _walletProfile = null;
+    unawaited(_clearAuthStorage());
+  }
+
   Future<void> _clearStorage() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
@@ -284,6 +291,16 @@ class SessionManager {
     await prefs.remove(_keyWalletJson);
     await prefs.remove(_keyRentalJson);
     await prefs.remove(_keyRentalStartedAt);
+  }
+
+  Future<void> _clearAuthStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyToken);
+    await prefs.remove(_keyName);
+    await prefs.remove(_keyEmail);
+    await prefs.remove(_keyUserId);
+    await prefs.remove(_keyUserJson);
+    await prefs.remove(_keyWalletJson);
   }
 
   Map<String, dynamic>? _decodeMap(String? raw) {
