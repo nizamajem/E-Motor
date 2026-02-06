@@ -21,6 +21,7 @@ class ApiConfig {
 
   /// Paths grouped here to keep usage consistent across the app.
   static const String loginPath = '/auth/login-emotor';
+  static const String refreshMobilePath = '/auth/refresh-mobile';
   static const String logoutPath = '/auth/logout';
   static const String emotorListPath = '/emotors';
   static const String emotorByIdPath = '/emotors/get-by-id';

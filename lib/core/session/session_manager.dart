@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserSession {
@@ -74,6 +75,7 @@ class SessionManager {
   static const _keyWalletJson = 'session_wallet_json';
   static const _keyRentalJson = 'session_rental_json';
   static const _keyRentalStartedAt = 'session_rental_started_at';
+  static const _secureKeyToken = 'secure_session_token';
 
   UserSession? _user;
   RentalSession? _rental;
@@ -83,6 +85,7 @@ class SessionManager {
   Map<String, dynamic>? _userProfile;
   Map<String, dynamic>? _emotorProfile;
   Map<String, dynamic>? _walletProfile;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   String? get token => _user?.token;
   UserSession? get user => _user;
@@ -96,7 +99,10 @@ class SessionManager {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_keyToken);
+    final secureToken = await _secureStorage.read(key: _secureKeyToken);
+    final token = (secureToken != null && secureToken.isNotEmpty)
+        ? secureToken
+        : prefs.getString(_keyToken);
     if (token != null && token.isNotEmpty) {
       _user = UserSession(
         token: token,
@@ -155,6 +161,7 @@ class SessionManager {
   Future<void> saveUser(UserSession session) async {
     _user = session;
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.write(key: _secureKeyToken, value: session.token);
     await prefs.setString(_keyToken, session.token);
     await prefs.setString(_keyName, session.name);
     await prefs.setString(_keyEmail, session.email);
@@ -175,6 +182,7 @@ class SessionManager {
       userId: current?.userId,
     );
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.write(key: _secureKeyToken, value: token);
     await prefs.setString(_keyToken, token);
     if (current != null) {
       await prefs.setString(_keyName, current.name);
@@ -280,6 +288,7 @@ class SessionManager {
 
   Future<void> _clearStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.delete(key: _secureKeyToken);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);
@@ -295,6 +304,7 @@ class SessionManager {
 
   Future<void> _clearAuthStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.delete(key: _secureKeyToken);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);

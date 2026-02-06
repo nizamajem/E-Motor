@@ -9,6 +9,7 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
+  static Future<bool>? _refreshInFlight;
 
   Uri _buildUri(String path, [Map<String, String>? query]) {
     if (path.startsWith('http')) return Uri.parse(path);
@@ -54,9 +55,8 @@ class ApiClient {
   ) async {
     var response = await request();
     if (_shouldRetryWithRefresh(response)) {
-      final refreshToken = _extractRefreshToken(response);
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        await SessionManager.instance.saveToken(refreshToken);
+      final refreshed = await _refreshToken();
+      if (refreshed) {
         response = await request();
       }
     }
@@ -65,13 +65,44 @@ class ApiClient {
 
   bool _shouldRetryWithRefresh(http.Response response) {
     final status = response.statusCode;
-    if (status != 401 && status != 403) return false;
-    return _extractRefreshToken(response)?.isNotEmpty == true;
+    return status == 401 || status == 403;
   }
 
   String? _extractRefreshToken(http.Response response) {
     return response.headers['x-refresh-token'] ??
         response.headers['x-refresh_token'];
+  }
+
+  Future<bool> _refreshToken() async {
+    final token = SessionManager.instance.token;
+    if (token == null || token.isEmpty) return false;
+    _refreshInFlight ??= _performRefresh(token);
+    final result = await _refreshInFlight!;
+    _refreshInFlight = null;
+    return result;
+  }
+
+  Future<bool> _performRefresh(String token) async {
+    try {
+      final response = await _client.post(
+        _buildUri(ApiConfig.refreshMobilePath),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return false;
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return false;
+      final newToken = decoded['token']?.toString() ?? '';
+      if (newToken.isEmpty) return false;
+      await SessionManager.instance.saveToken(newToken);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Map<String, dynamic> _decode(http.Response response) {
