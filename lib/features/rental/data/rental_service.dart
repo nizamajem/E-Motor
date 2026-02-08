@@ -595,19 +595,6 @@ class RentalService {
         active = activeEntries.first;
       }
     }
-    if (active == null && entries.isNotEmpty && preferredPlate.isNotEmpty) {
-      final matching = entries.where((entry) {
-        return normalizePlate(entry.plate) == preferredPlate;
-      }).toList();
-      matching.sort((a, b) {
-        final aDate = a.startDate ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDate = b.startDate ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bDate.compareTo(aDate);
-      });
-      if (matching.isNotEmpty) {
-        active = matching.first;
-      }
-    }
     final emotorInUse = assigned?.isInUse == true;
     if (active == null && !emotorInUse) return null;
 

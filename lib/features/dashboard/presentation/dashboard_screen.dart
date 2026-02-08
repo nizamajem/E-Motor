@@ -9,6 +9,7 @@ import '../../../components/no_internet_dialog.dart';
 import '../../../core/network/network_utils.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../history/data/history_service.dart';
+import '../../history/data/history_models.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../rental/data/rental_service.dart';
@@ -70,14 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
     }
     _ensureTimer();
-    if (_hasRental) {
-      if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
-        _refreshStatusOnce();
-        _startStatusListener();
-      }
-    } else {
-      _restoreActiveRentalIfNeeded();
-    }
+    _bootstrapRental();
   }
 
   @override
@@ -105,7 +99,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       if (!mounted) return;
 
       final storedRental = SessionManager.instance.rental;
-    if (storedRental != null) {
+      if (storedRental != null) {
         setState(() {
           _rental ??= storedRental;
           _isActive = _rental?.motorOn ?? _isActive;
@@ -121,14 +115,51 @@ class _DashboardScreenState extends State<DashboardScreen>
         });
         _ensureTimer();
         _statusSub?.cancel();
-        if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
-          _refreshStatusOnce();
-          _startStatusListener();
-        }
+        await _bootstrapRental();
       }
     } finally {
       _resumeInProgress = false;
     }
+  }
+
+  Future<void> _bootstrapRental() async {
+    if (_hasRental) {
+      await _verifyRentalActive();
+      if (!mounted) return;
+      if (_hasRental) {
+        if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
+          _refreshStatusOnce();
+          _startStatusListener();
+        }
+        return;
+      }
+    }
+    await _restoreActiveRentalIfNeeded();
+  }
+
+  Future<void> _verifyRentalActive() async {
+    final rideId = _rental?.rideHistoryId;
+    if (rideId == null || rideId.isEmpty) return;
+    try {
+      final history = await HistoryService().fetchHistoryById(rideId);
+      if (!mounted) return;
+      final entry = history.isNotEmpty ? history.first : null;
+      final isActive = entry is HistoryEntry && entry.isActive;
+      if (!isActive) {
+        _statusSub?.cancel();
+        _timer?.cancel();
+        setState(() {
+          _status = null;
+          _rental = null;
+          _hasRental = false;
+          _requireStart = true;
+          _isActive = false;
+          _elapsedSeconds = 0;
+        });
+        SessionManager.instance.clearRental();
+        SessionManager.instance.setRentalStartedAt(null);
+      }
+    } catch (_) {}
   }
 
   Future<void> _restoreActiveRentalIfNeeded() async {
