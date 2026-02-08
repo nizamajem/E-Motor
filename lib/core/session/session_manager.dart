@@ -75,6 +75,7 @@ class SessionManager {
   static const _keyWalletJson = 'session_wallet_json';
   static const _keyRentalJson = 'session_rental_json';
   static const _keyRentalStartedAt = 'session_rental_started_at';
+  static const _secureKeyAccessToken = 'secure_access_token';
   static const _secureKeyRefreshToken = 'secure_refresh_token';
   static const _secureKeyUserId = 'secure_user_id';
 
@@ -102,10 +103,18 @@ class SessionManager {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    final accessToken = await _secureStorage.read(key: _secureKeyAccessToken);
     _refreshToken = await _secureStorage.read(key: _secureKeyRefreshToken);
     final secureUserId = await _secureStorage.read(key: _secureKeyUserId);
     await prefs.remove(_keyToken);
-    if (secureUserId != null && secureUserId.isNotEmpty) {
+    if (accessToken != null && accessToken.isNotEmpty) {
+      _user = UserSession(
+        token: accessToken,
+        name: prefs.getString(_keyName) ?? '',
+        email: prefs.getString(_keyEmail) ?? '',
+        userId: secureUserId,
+      );
+    } else if (secureUserId != null && secureUserId.isNotEmpty) {
       _user = UserSession(
         token: '',
         name: prefs.getString(_keyName) ?? '',
@@ -196,6 +205,7 @@ class SessionManager {
       email: current?.email ?? '',
       userId: current?.userId,
     );
+    await _secureStorage.write(key: _secureKeyAccessToken, value: token);
   }
 
   void saveRental(RentalSession session) {
@@ -299,6 +309,7 @@ class SessionManager {
 
   Future<void> _clearStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.delete(key: _secureKeyAccessToken);
     await _secureStorage.delete(key: _secureKeyRefreshToken);
     await _secureStorage.delete(key: _secureKeyUserId);
     await prefs.remove(_keyToken);
@@ -316,6 +327,7 @@ class SessionManager {
 
   Future<void> _clearAuthStorage() async {
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.delete(key: _secureKeyAccessToken);
     await _secureStorage.delete(key: _secureKeyRefreshToken);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
