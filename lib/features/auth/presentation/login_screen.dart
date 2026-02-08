@@ -19,7 +19,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _isLoading = false;
-  final _usernameController = TextEditingController(text: 'demo');
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final RentalService _rentalService = RentalService();
   final EmotorService _emotorService = EmotorService();

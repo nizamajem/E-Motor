@@ -75,7 +75,8 @@ class SessionManager {
   static const _keyWalletJson = 'session_wallet_json';
   static const _keyRentalJson = 'session_rental_json';
   static const _keyRentalStartedAt = 'session_rental_started_at';
-  static const _secureKeyToken = 'secure_session_token';
+  static const _secureKeyRefreshToken = 'secure_refresh_token';
+  static const _secureKeyUserId = 'secure_user_id';
 
   UserSession? _user;
   RentalSession? _rental;
@@ -86,8 +87,10 @@ class SessionManager {
   Map<String, dynamic>? _emotorProfile;
   Map<String, dynamic>? _walletProfile;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  String? _refreshToken;
 
   String? get token => _user?.token;
+  String? get refreshToken => _refreshToken;
   UserSession? get user => _user;
   RentalSession? get rental => _rental;
   DateTime? get rentalStartedAt => _rentalStartedAt;
@@ -99,17 +102,18 @@ class SessionManager {
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    final secureToken = await _secureStorage.read(key: _secureKeyToken);
-    final token = (secureToken != null && secureToken.isNotEmpty)
-        ? secureToken
-        : prefs.getString(_keyToken);
-    if (token != null && token.isNotEmpty) {
+    _refreshToken = await _secureStorage.read(key: _secureKeyRefreshToken);
+    final secureUserId = await _secureStorage.read(key: _secureKeyUserId);
+    await prefs.remove(_keyToken);
+    if (secureUserId != null && secureUserId.isNotEmpty) {
       _user = UserSession(
-        token: token,
+        token: '',
         name: prefs.getString(_keyName) ?? '',
         email: prefs.getString(_keyEmail) ?? '',
-        userId: prefs.getString(_keyUserId),
+        userId: secureUserId,
       );
+    } else {
+      _user = null;
     }
     _emotorId = prefs.getString(_keyEmotorId);
     _emotorImei = prefs.getString(_keyEmotorImei);
@@ -123,6 +127,13 @@ class SessionManager {
     final startedAtMs = prefs.getInt(_keyRentalStartedAt);
     if (startedAtMs != null && startedAtMs > 0) {
       _rentalStartedAt = DateTime.fromMillisecondsSinceEpoch(startedAtMs);
+    } else if (rentalJson != null) {
+      final fallbackMs = rentalJson['started_at'];
+      if (fallbackMs is num && fallbackMs.toInt() > 0) {
+        _rentalStartedAt = DateTime.fromMillisecondsSinceEpoch(
+          fallbackMs.toInt(),
+        );
+      }
     }
     if ((_emotorId == null || _emotorId!.isEmpty) && _emotorProfile != null) {
       final id = _emotorProfile?['id']?.toString().trim();
@@ -161,12 +172,16 @@ class SessionManager {
   Future<void> saveUser(UserSession session) async {
     _user = session;
     final prefs = await SharedPreferences.getInstance();
-    await _secureStorage.write(key: _secureKeyToken, value: session.token);
-    await prefs.setString(_keyToken, session.token);
+    // Do not persist access_token per backend policy.
+    await prefs.remove(_keyToken);
     await prefs.setString(_keyName, session.name);
     await prefs.setString(_keyEmail, session.email);
     if (session.userId != null && session.userId!.isNotEmpty) {
       await prefs.setString(_keyUserId, session.userId!);
+      await _secureStorage.write(
+        key: _secureKeyUserId,
+        value: session.userId!,
+      );
     } else {
       await prefs.remove(_keyUserId);
     }
@@ -181,16 +196,6 @@ class SessionManager {
       email: current?.email ?? '',
       userId: current?.userId,
     );
-    final prefs = await SharedPreferences.getInstance();
-    await _secureStorage.write(key: _secureKeyToken, value: token);
-    await prefs.setString(_keyToken, token);
-    if (current != null) {
-      await prefs.setString(_keyName, current.name);
-      await prefs.setString(_keyEmail, current.email);
-      if (current.userId != null && current.userId!.isNotEmpty) {
-        await prefs.setString(_keyUserId, current.userId!);
-      }
-    }
   }
 
   void saveRental(RentalSession session) {
@@ -202,6 +207,10 @@ class SessionManager {
   void setRentalStartedAt(DateTime? startedAt) {
     _rentalStartedAt = startedAt;
     unawaited(_saveRentalStartedAt(startedAt));
+    final current = _rental;
+    if (current != null) {
+      unawaited(_saveRentalStorage(current));
+    }
   }
 
   void clearRental() {
@@ -276,6 +285,7 @@ class SessionManager {
     _userProfile = null;
     _emotorProfile = null;
     _walletProfile = null;
+    _refreshToken = null;
     unawaited(_clearStorage());
   }
 
@@ -283,12 +293,14 @@ class SessionManager {
     _user = null;
     _userProfile = null;
     _walletProfile = null;
+    _refreshToken = null;
     unawaited(_clearAuthStorage());
   }
 
   Future<void> _clearStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    await _secureStorage.delete(key: _secureKeyToken);
+    await _secureStorage.delete(key: _secureKeyRefreshToken);
+    await _secureStorage.delete(key: _secureKeyUserId);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);
@@ -304,13 +316,19 @@ class SessionManager {
 
   Future<void> _clearAuthStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    await _secureStorage.delete(key: _secureKeyToken);
+    await _secureStorage.delete(key: _secureKeyRefreshToken);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);
     await prefs.remove(_keyUserId);
     await prefs.remove(_keyUserJson);
     await prefs.remove(_keyWalletJson);
+  }
+
+  Future<void> saveRefreshToken(String token) async {
+    if (token.isEmpty) return;
+    _refreshToken = token;
+    await _secureStorage.write(key: _secureKeyRefreshToken, value: token);
   }
 
   Map<String, dynamic>? _decodeMap(String? raw) {
@@ -343,6 +361,8 @@ class SessionManager {
         'battery_percent': session.batteryPercent,
         'motor_on': session.motorOn,
         'rideHistoryId': session.rideHistoryId,
+        if (_rentalStartedAt != null)
+          'started_at': _rentalStartedAt!.millisecondsSinceEpoch,
       }),
     );
   }
