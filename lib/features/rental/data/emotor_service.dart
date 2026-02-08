@@ -18,9 +18,9 @@ class Emotor {
           json['license_plate']?.toString() ??
           '-',
       userId: json['userId']?.toString() ?? json['user_id']?.toString() ?? '',
-      status: json['status']?.toString() ??
-          json['bike_status']?.toString() ??
-          json['rental_status']?.toString(),
+      status: json['rental_status']?.toString() ??
+          json['status']?.toString() ??
+          json['bike_status']?.toString(),
     );
   }
 
