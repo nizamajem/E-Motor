@@ -8,6 +8,7 @@ class Emotor {
     required this.plate,
     required this.userId,
     this.status,
+    this.createTime,
   });
 
   factory Emotor.fromJson(Map<String, dynamic> json) {
@@ -21,6 +22,7 @@ class Emotor {
       status: json['rental_status']?.toString() ??
           json['status']?.toString() ??
           json['bike_status']?.toString(),
+      createTime: DateTime.tryParse(json['create_time']?.toString() ?? ''),
     );
   }
 
@@ -28,6 +30,7 @@ class Emotor {
   final String plate;
   final String userId;
   final String? status;
+  final DateTime? createTime;
 
   bool get isInUse {
     final value = status?.toLowerCase().trim();

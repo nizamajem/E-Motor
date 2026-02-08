@@ -12,6 +12,7 @@ import '../../history/data/history_service.dart';
 import '../../history/data/history_models.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../auth/presentation/login_screen.dart';
+import '../../rental/data/emotor_service.dart';
 import '../../rental/data/rental_service.dart';
 import '../../history/presentation/detail_history_screen.dart';
 import '../../../components/bottom_nav.dart';
@@ -47,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Timer? _timer;
   static const Duration kIoTCommandTimeout = Duration(seconds: 12);
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  Timer? _rentalTimeSyncTimer;
 
   bool _noInternetDialogShown = false;
   bool _resumeInProgress = false;
@@ -81,6 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     _statusSub?.cancel();
     _timer?.cancel();
+    _rentalTimeSyncTimer?.cancel();
     super.dispose();
   }
 
@@ -131,21 +134,80 @@ class _DashboardScreenState extends State<DashboardScreen>
           _refreshStatusOnce();
           _startStatusListener();
         }
+        _syncStartRentalTime();
         return;
       }
     }
     await _restoreActiveRentalIfNeeded();
   }
 
+  void _syncStartRentalTime() {
+    _rentalTimeSyncTimer?.cancel();
+    _fetchAssignedAndSyncStartTime();
+    _rentalTimeSyncTimer = Timer(const Duration(seconds: 3), () {
+      _fetchAssignedAndSyncStartTime();
+    });
+  }
+
+  Future<void> _fetchAssignedAndSyncStartTime() async {
+    final userId = SessionManager.instance.user?.userId ??
+        SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+        SessionManager.instance.userProfile?['id']?.toString().trim();
+    if (userId == null || userId.isEmpty) return;
+    try {
+      final assigned = await EmotorService().fetchAssignedToUser(userId);
+      if (!mounted || assigned?.createTime == null) return;
+      SessionManager.instance.setRentalStartedAt(assigned!.createTime);
+      if (mounted) {
+        setState(() {
+          _elapsedSeconds = 0;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _verifyRentalActive() async {
     final rideId = _rental?.rideHistoryId;
-    if (rideId == null || rideId.isEmpty) return;
+    if (rideId == null || rideId.isEmpty) {
+      await _verifyAssignedEmotorStatus();
+      return;
+    }
     try {
       final history = await HistoryService().fetchHistoryById(rideId);
       if (!mounted) return;
       final entry = history.isNotEmpty ? history.first : null;
       final isActive = entry is HistoryEntry && entry.isActive;
       if (!isActive) {
+        _statusSub?.cancel();
+        _timer?.cancel();
+        setState(() {
+          _status = null;
+          _rental = null;
+          _hasRental = false;
+          _requireStart = true;
+          _isActive = false;
+          _elapsedSeconds = 0;
+        });
+        SessionManager.instance.clearRental();
+        SessionManager.instance.setRentalStartedAt(null);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _verifyAssignedEmotorStatus() async {
+    try {
+      final userId = SessionManager.instance.user?.userId ??
+          SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+          SessionManager.instance.userProfile?['id']?.toString().trim();
+      if (userId == null || userId.isEmpty) return;
+      final assigned = await EmotorService().fetchAssignedToUser(userId);
+      if (!mounted) return;
+      if (assigned == null) return;
+      if (!assigned.isInUse) {
+        if ((_rental?.rideHistoryId ?? '').isEmpty &&
+            SessionManager.instance.rentalStartedAt != null) {
+          return;
+        }
         _statusSub?.cancel();
         _timer?.cancel();
         setState(() {
@@ -184,6 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       _refreshStatusOnce();
       _startStatusListener();
     }
+    _syncStartRentalTime();
   }
 
   void _listenInternetConnection() {
@@ -467,6 +530,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       emotorPlate,
       emotorName,
     ], emotorFallback);
+    final rentalStartedAt = SessionManager.instance.rentalStartedAt;
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -542,6 +606,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       isEnding: _isEnding,
                                       isFinding: _isFinding,
                                       elapsedSeconds: _elapsedSeconds,
+                                      rentalStartedAt: rentalStartedAt,
                                       hasRental: _hasRental,
                                       onEnd: _handleEndRental,
                                       onFind: _handleFind,
@@ -1090,15 +1155,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<String?> _endRentalWithRetry() async {
-    const maxAttempts = 4;
+    const maxAttempts = 3;
     var attempt = 0;
     while (mounted && attempt < maxAttempts) {
       try {
         return await _rentalService.endRental();
       } on ApiException catch (e) {
-        if (e.statusCode == 400) {
-          attempt += 1;
-          await Future<void>.delayed(const Duration(seconds: 3));
+        attempt += 1;
+        if (attempt < maxAttempts) {
+          await Future<void>.delayed(const Duration(seconds: 2));
           continue;
         }
         rethrow;
@@ -1391,43 +1456,17 @@ class _PlateBadge extends StatelessWidget {
         color: const Color(0xFFF4F7FB),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          Container(
-            height: 32,
-            width: 32,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: muted ? 0.04 : 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.eco_rounded,
-              color: muted ? Colors.grey.shade500 : const Color(0xFF2C7BFE),
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              plate,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ],
+      alignment: Alignment.center,
+      child: Text(
+        plate,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.poppins(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w700,
+          color: Colors.black,
+        ),
       ),
     );
   }
@@ -1441,6 +1480,7 @@ class _GridCards extends StatelessWidget {
     required this.isEnding,
     required this.isFinding,
     required this.elapsedSeconds,
+    required this.rentalStartedAt,
     required this.hasRental,
     required this.onEnd,
     required this.onFind,
@@ -1454,6 +1494,7 @@ class _GridCards extends StatelessWidget {
   final bool isEnding;
   final bool isFinding;
   final int elapsedSeconds;
+  final DateTime? rentalStartedAt;
   final bool hasRental;
   final VoidCallback onEnd;
   final VoidCallback onFind;
@@ -1467,15 +1508,61 @@ class _GridCards extends StatelessWidget {
     final ping = status?.pingQuality ?? '---';
     final l10n = AppLocalizations.of(context);
     final label = GoogleFonts.poppins(
-      fontSize: 11,
+      fontSize: 10.5,
       fontWeight: FontWeight.w600,
       color: Colors.white,
     );
     final value = GoogleFonts.poppins(
-      fontSize: 13.5,
+      fontSize: 12.5,
       fontWeight: FontWeight.w700,
       color: Colors.white,
     );
+    String formatDate(DateTime? dt) {
+      if (dt == null) return '--';
+      final local = dt;
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      final day = local.day.toString().padLeft(2, '0');
+      final month = months[local.month - 1];
+      return '$day $month ${local.year}';
+    }
+
+    String formatTime(DateTime? dt) {
+      if (dt == null) return '--';
+      final local = dt;
+      final hour = local.hour.toString().padLeft(2, '0');
+      final minute = local.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    }
+
+    String rentalValue() {
+      if (!hasRental) return '--';
+      if (rentalStartedAt != null) {
+        return formatDate(rentalStartedAt);
+      }
+      return '--';
+    }
+
+    List<String> splitValue(String value) {
+      final parts = value.split('|');
+      if (parts.length >= 2) {
+        return [parts[0], parts.sublist(1).join('|')];
+      }
+      return [value, ''];
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -1507,9 +1594,11 @@ class _GridCards extends StatelessWidget {
             children: [
               Expanded(
                 child: _RentalTimeTile(
-                  label: l10n.rentalTime,
+                  label: '${l10n.start} ${l10n.rentalTime}',
                   value: hasRental
-                      ? _formatDuration(elapsedSeconds)
+                      ? (rentalStartedAt != null
+                            ? '${rentalValue()}|${formatTime(rentalStartedAt)}'
+                            : rentalValue())
                       : (rentalTime == 0
                             ? '--'
                             : '$rentalTime ${l10n.durationMinute}'),
@@ -1663,10 +1752,13 @@ class _RentalTimeTile extends StatelessWidget {
             end: Alignment.topCenter,
             colors: [Color(0xFFE5ECF7), Color(0xFFF4F7FB)],
           );
+    final parts = value.split('|');
+    final line1 = parts.isNotEmpty ? parts.first : '';
+    final line2 = parts.length > 1 ? parts.sublist(1).join('|') : '';
     return Opacity(
       opacity: dimmed ? 0.55 : 1,
       child: Container(
-        height: 68,
+        height: 74,
         decoration: BoxDecoration(
           gradient: bg,
           borderRadius: BorderRadius.circular(12),
@@ -1694,41 +1786,23 @@ class _RentalTimeTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: labelStyle.copyWith(color: fg),
                   ),
-                  if (value.isNotEmpty)
+                  if (line1.isNotEmpty)
                     Text(
-                      value,
+                      line1,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: valueStyle.copyWith(color: fg),
+                      style: valueStyle.copyWith(color: fg, fontSize: 11.5),
+                    ),
+                  if (line2.isNotEmpty)
+                    Text(
+                      line2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: valueStyle.copyWith(color: fg, fontSize: 11),
                     ),
                 ],
               ),
             ),
-            if (active)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      AppLocalizations.of(context).live,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             if (!active)
               Padding(
                 padding: const EdgeInsets.only(left: 6),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/navigation/app_navigator.dart';
 import 'core/session/session_manager.dart';
 import 'core/localization/app_localizations.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
@@ -17,6 +18,7 @@ class EMotorApp extends StatelessWidget {
       title: 'Gridwiz E-Motor',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      navigatorKey: AppNavigator.key,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const [
         AppLocalizations.delegate,

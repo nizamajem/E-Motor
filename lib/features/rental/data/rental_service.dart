@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
@@ -187,8 +188,6 @@ class RentalService {
     final body = <String, dynamic>{
       'username': username,
       'password': password,
-      if (ApiConfig.loginSessionSeconds > 0)
-        'detik': ApiConfig.loginSessionSeconds,
     };
     final res = await _client.postJson(
       ApiConfig.loginPath,
@@ -197,6 +196,17 @@ class RentalService {
     debugPrint('login response: $res');
 
     final data = res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : null;
+    final tokenForLog = _findStringByKey(
+          {
+            ...res,
+            if (data != null) ...data,
+          },
+          ['access_token', 'token', 'access'],
+        ) ??
+        '';
+    if (tokenForLog.isNotEmpty) {
+      _logTokenTimes('login', tokenForLog);
+    }
     final rootUser = res['user'] is Map<String, dynamic> ? res['user'] as Map<String, dynamic> : null;
     final dataUser =
         data != null && data['user'] is Map<String, dynamic> ? data['user'] as Map<String, dynamic> : null;
@@ -206,7 +216,15 @@ class RentalService {
             ...res,
             if (data != null) ...data,
           },
-          ['token', 'access'],
+          ['access_token', 'token', 'access'],
+        ) ??
+        '';
+    final refreshToken = _findStringByKey(
+          {
+            ...res,
+            if (data != null) ...data,
+          },
+          ['refresh_token', 'refreshToken'],
         ) ??
         '';
     final name = _findStringByKey(
@@ -297,6 +315,9 @@ class RentalService {
       SessionManager.instance.clearRental();
     }
     await SessionManager.instance.saveUser(session);
+    if (refreshToken.isNotEmpty) {
+      await SessionManager.instance.saveRefreshToken(refreshToken);
+    }
     if (user != null) {
       await SessionManager.instance.saveUserProfile(user);
     }
@@ -313,6 +334,20 @@ class RentalService {
       await SessionManager.instance.saveEmotorImei(emotorImei);
     }
     return session;
+  }
+
+  void _logTokenTimes(String label, String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return;
+      var payload = parts[1];
+      payload = base64Url.normalize(payload);
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(payload)));
+      if (decoded is! Map<String, dynamic>) return;
+      final iat = decoded['iat'];
+      final exp = decoded['exp'];
+      debugPrint('token($label) iat=$iat exp=$exp');
+    } catch (_) {}
   }
 
   Future<RentalSession> startRental() async {
@@ -354,6 +389,7 @@ class RentalService {
     final rentalPayload =
         res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : res;
     var rental = RentalSession.fromJson(rentalPayload);
+    final localStart = DateTime.now();
     if (rental.emotorId.isEmpty && emotorId.isNotEmpty) {
       rental = RentalSession(
         id: rental.id,
@@ -366,6 +402,7 @@ class RentalService {
       );
     }
     SessionManager.instance.saveRental(rental);
+    SessionManager.instance.setRentalStartedAt(localStart);
     return rental;
   }
 
@@ -634,9 +671,42 @@ class RentalService {
       rideHistoryId: active?.id,
     );
     SessionManager.instance.saveRental(rental);
-    if (active?.startDate != null) {
+    if (SessionManager.instance.rentalStartedAt == null &&
+        active?.startDate != null) {
       SessionManager.instance.setRentalStartedAt(active!.startDate);
     }
     return rental;
+  }
+
+  Future<String?> forceEndRental({
+    String? rideId,
+    String? reason,
+    String? forcedBy,
+  }) async {
+    final emotorId = SessionManager.instance.rental?.emotorId ??
+        SessionManager.instance.emotorId ??
+        ApiConfig.emotorId;
+    final emotorImei = SessionManager.instance.emotorImei ?? '';
+    final body = <String, dynamic>{
+      if (rideId != null && rideId.isNotEmpty) 'rideId': rideId,
+      if ((rideId == null || rideId.isEmpty) && emotorId.isNotEmpty)
+        'emotorId': emotorId,
+      if ((rideId == null || rideId.isEmpty) && emotorId.isEmpty && emotorImei.isNotEmpty)
+        'imei': emotorImei,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
+      if (forcedBy != null && forcedBy.isNotEmpty) 'forcedBy': forcedBy,
+    };
+    if (!body.containsKey('rideId') &&
+        !body.containsKey('emotorId') &&
+        !body.containsKey('imei')) {
+      return null;
+    }
+    final res = await _client.postJson(
+      ApiConfig.forceEndRentalPath,
+      auth: true,
+      body: body,
+    );
+    final ride = res['ride'] is Map<String, dynamic> ? res['ride'] as Map<String, dynamic> : null;
+    return ride?['id']?.toString() ?? rideId ?? emotorId;
   }
 }
