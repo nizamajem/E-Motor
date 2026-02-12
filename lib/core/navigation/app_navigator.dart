@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../features/auth/presentation/login_screen.dart';
+
 class AppNavigator {
   static final GlobalKey<NavigatorState> key = GlobalKey<NavigatorState>();
   static bool _refreshDialogOpen = false;
@@ -21,10 +23,22 @@ class AppNavigator {
         });
         return AlertDialog(
           content: Text(message),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         );
       },
     );
     _refreshDialogOpen = false;
+  }
+
+  static Future<void> navigateToLogin() async {
+    final context = key.currentState?.overlay?.context;
+    if (context == null) return;
+
+    key.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 }

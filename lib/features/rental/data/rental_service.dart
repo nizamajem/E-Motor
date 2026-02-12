@@ -44,8 +44,8 @@ class RideStatus {
       return double.tryParse(value.toString()) ?? 0;
     }
 
-    final statusStr =
-        (merged['status'] ?? merged['bike_status'] ?? '').toString();
+    final statusStr = (merged['status'] ?? merged['bike_status'] ?? '')
+        .toString();
     final hasStatusText = statusStr.isNotEmpty;
     final hasMotorState =
         merged.containsKey('motor_on') ||
@@ -65,6 +65,7 @@ class RideStatus {
       if (text.isEmpty) return null;
       return DateTime.tryParse(text);
     }
+
     final startAt = parseDate(
       merged['start_position_time'] ??
           merged['start_date_time'] ??
@@ -75,7 +76,8 @@ class RideStatus {
           merged['end_date_time'] ??
           merged['end_time'],
     );
-    final isEnded = merged['is_end'] == true ||
+    final isEnded =
+        merged['is_end'] == true ||
         merged['isEnded'] == true ||
         merged['ended'] == true ||
         merged['ride_ended'] == true ||
@@ -91,30 +93,38 @@ class RideStatus {
           merged['carbon'],
     );
     final calories = toDouble(merged['calories']);
-    final distanceMeters = toDouble(merged['total_distance_meters'] ??
-        merged['distance_m'] ??
-        merged['distance']);
-    final power = merged['power'] ??
+    final distanceMeters = toDouble(
+      merged['total_distance_meters'] ??
+          merged['distance_m'] ??
+          merged['distance'],
+    );
+    final power =
+        merged['power'] ??
         merged['battery'] ??
         merged['battery_percent'] ??
         merged['batteryPercent'];
-    final signal = merged['signalDbm'] ??
+    final signal =
+        merged['signalDbm'] ??
         merged['signal_dbm'] ??
         merged['signal'] ??
         merged['signal_strength'];
-    final plate = merged['vehicle_number'] ??
-        merged['plate'] ??
-        merged['license_plate'];
-    final signalDbm =
-        signal is num ? signal.toDouble() : double.tryParse(signal?.toString() ?? '');
+    final plate =
+        merged['vehicle_number'] ?? merged['plate'] ?? merged['license_plate'];
+    final signalDbm = signal is num
+        ? signal.toDouble()
+        : double.tryParse(signal?.toString() ?? '');
     return RideStatus(
-      motorOn: merged['motor_on'] == true ||
+      motorOn:
+          merged['motor_on'] == true ||
           merged['motorOn'] == true ||
           merged['is_active'] == true ||
           isAccOn,
-      rangeKm:
-          toDouble(merged['range_km'] ?? merged['range'] ?? distanceMeters / 1000),
-      pingQuality: signalDbm == null ? (merged['ping']?.toString() ?? 'Unknown') : '${signalDbm.toStringAsFixed(0)} dBm',
+      rangeKm: toDouble(
+        merged['range_km'] ?? merged['range'] ?? distanceMeters / 1000,
+      ),
+      pingQuality: signalDbm == null
+          ? (merged['ping']?.toString() ?? 'Unknown')
+          : '${signalDbm.toStringAsFixed(0)} dBm',
       rentalMinutes: rideSeconds == 0 ? 0 : (rideSeconds / 60).round(),
       carbonReduction: carbon,
       rideSeconds: rideSeconds.round(),
@@ -156,7 +166,8 @@ class RentalService {
       final value = entry.value;
       if (keys.any((k) => key.contains(k))) {
         if (value is String && value.isNotEmpty) return value;
-        if (value != null && value.toString().isNotEmpty) return value.toString();
+        if (value != null && value.toString().isNotEmpty)
+          return value.toString();
       }
       if (value is Map<String, dynamic>) {
         final nested = _findStringByKey(value, keys);
@@ -166,7 +177,10 @@ class RentalService {
     return null;
   }
 
-  Map<String, dynamic>? _findMapByKey(Map<String, dynamic> map, List<String> keys) {
+  Map<String, dynamic>? _findMapByKey(
+    Map<String, dynamic> map,
+    List<String> keys,
+  ) {
     for (final entry in map.entries) {
       final key = entry.key.toLowerCase();
       final value = entry.value;
@@ -185,126 +199,117 @@ class RentalService {
     required String username,
     required String password,
   }) async {
-    final body = <String, dynamic>{
-      'username': username,
-      'password': password,
-    };
-    final res = await _client.postJson(
-      ApiConfig.loginPath,
-      body: body,
-    );
+    final body = <String, dynamic>{'username': username, 'password': password};
+    final res = await _client.postJson(ApiConfig.loginPath, body: body);
     debugPrint('login response: $res');
 
-    final data = res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : null;
-    final tokenForLog = _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
+    final data = res['data'] is Map<String, dynamic>
+        ? res['data'] as Map<String, dynamic>
+        : null;
+    final tokenForLog =
+        _findStringByKey(
+          {...res, if (data != null) ...data},
           ['access_token', 'token', 'access'],
         ) ??
         '';
     if (tokenForLog.isNotEmpty) {
       _logTokenTimes('login', tokenForLog);
     }
-    final rootUser = res['user'] is Map<String, dynamic> ? res['user'] as Map<String, dynamic> : null;
-    final dataUser =
-        data != null && data['user'] is Map<String, dynamic> ? data['user'] as Map<String, dynamic> : null;
+    final rootUser = res['user'] is Map<String, dynamic>
+        ? res['user'] as Map<String, dynamic>
+        : null;
+    final dataUser = data != null && data['user'] is Map<String, dynamic>
+        ? data['user'] as Map<String, dynamic>
+        : null;
     final user = rootUser ?? dataUser;
-    final token = _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
+    final token =
+        _findStringByKey(
+          {...res, if (data != null) ...data},
           ['access_token', 'token', 'access'],
         ) ??
         '';
-    final refreshToken = _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
+    final refreshToken =
+        _findStringByKey(
+          {...res, if (data != null) ...data},
           ['refresh_token', 'refreshToken'],
         ) ??
         '';
-    final name = _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
-          ['name'],
-        ) ??
+    final name =
+        _findStringByKey({...res, if (data != null) ...data}, ['name']) ??
         username;
-    final email = _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
-          ['email'],
-        ) ??
+    final email =
+        _findStringByKey({...res, if (data != null) ...data}, ['email']) ??
         username;
-    final userId = user?['id_user']?.toString().trim() ??
+    final userId =
+        user?['id_user']?.toString().trim() ??
         user?['user_id']?.toString().trim() ??
         user?['id']?.toString().trim() ??
         _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
+          {...res, if (data != null) ...data},
           ['userid', 'user_id', 'id'],
         );
+
+    debugPrint('===== LOGIN SUCCESS =====');
+    debugPrint('Access token length: ${token.length}');
+    debugPrint('Refresh token length: ${refreshToken.length}');
+    debugPrint('==============================');
+    debugPrint('✅ LOGIN SUCCESS');
+    debugPrint('Access Token: $token');
+    debugPrint('Refresh Token: $refreshToken');
+    _logTokenTimes('login-access', token);
+
+    _logTokenTimes('login-access', token);
+
+    if (refreshToken.isNotEmpty) {
+      _logTokenTimes('login-refresh', refreshToken);
+    }
+
     final emotorFromUser = user?['emotor'] ?? user?['eMotor'];
     final emotorFromData = data?['emotor'] ?? data?['eMotor'];
     final emotorMap = (emotorFromUser is Map<String, dynamic>)
         ? emotorFromUser
         : (emotorFromData is Map<String, dynamic>)
-            ? emotorFromData
-            : _findMapByKey(
-                {
-                  ...res,
-                  if (data != null) ...data,
-                },
-                ['emotor'],
-              );
-    final emotorId = emotorMap?['id']?.toString().trim() ??
+        ? emotorFromData
+        : _findMapByKey({...res, if (data != null) ...data}, ['emotor']);
+    final emotorId =
+        emotorMap?['id']?.toString().trim() ??
         emotorMap?['emotorId']?.toString().trim() ??
         emotorMap?['emotor_id']?.toString().trim() ??
         _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
+          {...res, if (data != null) ...data},
           ['emotorid', 'emotor_id'],
         );
-    final emotorImei = emotorMap?['IMEI']?.toString().trim() ??
+    final emotorImei =
+        emotorMap?['IMEI']?.toString().trim() ??
         emotorMap?['imei']?.toString().trim() ??
-        _findStringByKey(
-          {
-            ...res,
-            if (data != null) ...data,
-          },
-          ['imei'],
-        );
+        _findStringByKey({...res, if (data != null) ...data}, ['imei']);
     final walletFromUser = user?['customerWallet'] ?? user?['customer_wallet'];
     final walletFromData = data?['customerWallet'] ?? data?['customer_wallet'];
     final walletMap = (walletFromUser is Map<String, dynamic>)
         ? walletFromUser
         : (walletFromData is Map<String, dynamic>)
-            ? walletFromData
-            : _findMapByKey(
-                {
-                  ...res,
-                  if (data != null) ...data,
-                },
-                ['customerwallet', 'customer_wallet', 'wallet'],
-              );
-    debugPrint('login parsed userId=$userId emotorId=$emotorId emotorImei=$emotorImei');
+        ? walletFromData
+        : _findMapByKey(
+            {...res, if (data != null) ...data},
+            ['customerwallet', 'customer_wallet', 'wallet'],
+          );
+    debugPrint(
+      'login parsed userId=$userId emotorId=$emotorId emotorImei=$emotorImei',
+    );
     if (token.isEmpty) {
-      throw ApiException('Token kosong dari server, pastikan endpoint login-emotor benar.');
+      throw ApiException(
+        'Token kosong dari server, pastikan endpoint login-emotor benar.',
+      );
     }
 
-    final session = UserSession(token: token, name: name, email: email, userId: userId);
-    final previousUserId = SessionManager.instance.user?.userId ??
+    final session = UserSession(
+      token: token,
+      name: name,
+      email: email,
+      userId: userId,
+    );
+    final previousUserId =
+        SessionManager.instance.user?.userId ??
         SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
         SessionManager.instance.userProfile?['id']?.toString().trim();
     if (previousUserId != null &&
@@ -351,31 +356,40 @@ class RentalService {
   }
 
   Future<RentalSession> startRental() async {
-    final userId = SessionManager.instance.user?.userId ??
+    final userId =
+        SessionManager.instance.user?.userId ??
         SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
         SessionManager.instance.userProfile?['id']?.toString().trim() ??
         '';
     if (userId.isEmpty) {
       throw ApiException('UserId tidak ditemukan. Silakan login ulang.');
     }
-    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']?.toString().trim();
-    final emotorIdFromUser = (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
-        ? (SessionManager.instance.userProfile?['emotor'] as Map<String, dynamic>)['id']?.toString().trim()
+    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']
+        ?.toString()
+        .trim();
+    final emotorIdFromUser =
+        (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
+        ? (SessionManager.instance.userProfile?['emotor']
+                  as Map<String, dynamic>)['id']
+              ?.toString()
+              .trim()
         : null;
     final emotorId = (SessionManager.instance.emotorId ?? '').isNotEmpty
         ? SessionManager.instance.emotorId!
         : (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty)
-            ? emotorIdFromProfile
-            : (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty)
-                ? emotorIdFromUser
+        ? emotorIdFromProfile
+        : (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty)
+        ? emotorIdFromUser
         : ApiConfig.emotorId.isNotEmpty
-            ? ApiConfig.emotorId
-            : SessionManager.instance.rental?.emotorId ?? '';
+        ? ApiConfig.emotorId
+        : SessionManager.instance.rental?.emotorId ?? '';
     debugPrint(
-        'startRental emotorId=$emotorId sessionEmotorId=${SessionManager.instance.emotorId}');
+      'startRental emotorId=$emotorId sessionEmotorId=${SessionManager.instance.emotorId}',
+    );
     if (emotorId.isEmpty) {
       throw ApiException(
-          'EMOTOR_ID belum diset. Jalankan dengan --dart-define=EMOTOR_ID=xxx atau simpan di session.');
+        'EMOTOR_ID belum diset. Jalankan dengan --dart-define=EMOTOR_ID=xxx atau simpan di session.',
+      );
     }
     if ((SessionManager.instance.emotorId ?? '').isEmpty) {
       await SessionManager.instance.saveEmotorId(emotorId);
@@ -386,8 +400,9 @@ class RentalService {
       auth: true,
       body: {'userId': userId, 'emotorId': emotorId},
     );
-    final rentalPayload =
-        res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : res;
+    final rentalPayload = res['data'] is Map<String, dynamic>
+        ? res['data'] as Map<String, dynamic>
+        : res;
     var rental = RentalSession.fromJson(rentalPayload);
     final localStart = DateTime.now();
     if (rental.emotorId.isEmpty && emotorId.isNotEmpty) {
@@ -407,14 +422,25 @@ class RentalService {
   }
 
   Future<bool> toggleMotor(bool enable) async {
-    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']?.toString().trim();
-    final emotorIdFromUser = (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
-        ? (SessionManager.instance.userProfile?['emotor'] as Map<String, dynamic>)['id']?.toString().trim()
+    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']
+        ?.toString()
+        .trim();
+    final emotorIdFromUser =
+        (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
+        ? (SessionManager.instance.userProfile?['emotor']
+                  as Map<String, dynamic>)['id']
+              ?.toString()
+              .trim()
         : null;
-    final emotorId = SessionManager.instance.rental?.emotorId ??
+    final emotorId =
+        SessionManager.instance.rental?.emotorId ??
         SessionManager.instance.emotorId ??
-        (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty ? emotorIdFromProfile : null) ??
-        (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty ? emotorIdFromUser : null) ??
+        (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
+            ? emotorIdFromProfile
+            : null) ??
+        (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty
+            ? emotorIdFromUser
+            : null) ??
         ApiConfig.emotorId;
     if (emotorId.isEmpty) {
       throw ApiException('Tidak ada emotorId untuk kirim perintah ACC.');
@@ -434,16 +460,18 @@ class RentalService {
   }
 
   Future<bool> findEmotor() async {
-    final emotorIdFromProfile =
-        SessionManager.instance.emotorProfile?['id']?.toString().trim();
+    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']
+        ?.toString()
+        .trim();
     final emotorIdFromUser =
         (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
-            ? (SessionManager.instance.userProfile?['emotor']
-                as Map<String, dynamic>)['id']
-                ?.toString()
-                .trim()
-            : null;
-    final emotorId = SessionManager.instance.rental?.emotorId ??
+        ? (SessionManager.instance.userProfile?['emotor']
+                  as Map<String, dynamic>)['id']
+              ?.toString()
+              .trim()
+        : null;
+    final emotorId =
+        SessionManager.instance.rental?.emotorId ??
         SessionManager.instance.emotorId ??
         (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
             ? emotorIdFromProfile
@@ -458,7 +486,9 @@ class RentalService {
     final res = await _client.postJson(
       ApiConfig.findCommandPath,
       auth: true,
-      body: {'ids': [emotorId]},
+      body: {
+        'ids': [emotorId],
+      },
     );
     if (res['ok'] == true) return true;
     final matched = res['matched'];
@@ -479,12 +509,15 @@ class RentalService {
       '${ApiConfig.historyByIdPath}/$rideId',
       auth: true,
     );
-    final payload =
-        res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : res;
+    final payload = res['data'] is Map<String, dynamic>
+        ? res['data'] as Map<String, dynamic>
+        : res;
     return RideStatus.fromJson(payload);
   }
 
-  Stream<RideStatus> statusStream({Duration interval = const Duration(seconds: 4)}) {
+  Stream<RideStatus> statusStream({
+    Duration interval = const Duration(seconds: 4),
+  }) {
     return Stream.periodic(interval).asyncMap((_) => fetchStatus());
   }
 
@@ -494,12 +527,17 @@ class RentalService {
     if (userId.isEmpty) {
       throw ApiException('UserId tidak ditemukan. Silakan login ulang.');
     }
-    final emotorId = SessionManager.instance.rental?.emotorId ??
+    final emotorId =
+        SessionManager.instance.rental?.emotorId ??
         SessionManager.instance.emotorId ??
         ApiConfig.emotorId;
     final emotorImei = SessionManager.instance.emotorImei ?? '';
-    if ((rideId == null || rideId.isEmpty) && emotorId.isEmpty && emotorImei.isEmpty) {
-      throw ApiException('Tidak ada rideId, emotorId, atau IMEI untuk diakhiri.');
+    if ((rideId == null || rideId.isEmpty) &&
+        emotorId.isEmpty &&
+        emotorImei.isEmpty) {
+      throw ApiException(
+        'Tidak ada rideId, emotorId, atau IMEI untuk diakhiri.',
+      );
     }
     final res = await _client.postJson(
       ApiConfig.endRentalPath,
@@ -514,10 +552,13 @@ class RentalService {
           'emotorId': emotorId,
       },
     );
-    final ride = res['ride'] is Map<String, dynamic> ? res['ride'] as Map<String, dynamic> : null;
+    final ride = res['ride'] is Map<String, dynamic>
+        ? res['ride'] as Map<String, dynamic>
+        : null;
     final endedId = ride?['id']?.toString();
-    final fallbackId =
-        (rideId != null && rideId.isNotEmpty) ? rideId : (emotorImei.isNotEmpty ? emotorImei : emotorId);
+    final fallbackId = (rideId != null && rideId.isNotEmpty)
+        ? rideId
+        : (emotorImei.isNotEmpty ? emotorImei : emotorId);
     return (endedId != null && endedId.isNotEmpty) ? endedId : fallbackId;
   }
 
@@ -577,12 +618,13 @@ class RentalService {
           emotorProfile?['license_plate']?.toString() ??
           (emotorFromUser is Map<String, dynamic>
               ? (emotorFromUser['vehicle_number']?.toString() ??
-                  emotorFromUser['plate']?.toString() ??
-                  emotorFromUser['license_plate']?.toString())
+                    emotorFromUser['plate']?.toString() ??
+                    emotorFromUser['license_plate']?.toString())
               : null),
     );
     String? preferredEmotorId = emotorProfile?['id']?.toString().trim();
-    final userId = SessionManager.instance.user?.userId ??
+    final userId =
+        SessionManager.instance.user?.userId ??
         SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
         SessionManager.instance.userProfile?['id']?.toString().trim();
     Emotor? assigned;
@@ -635,25 +677,26 @@ class RentalService {
     final emotorInUse = assigned?.isInUse == true;
     if (active == null && !emotorInUse) return null;
 
-    final emotorIdFromProfile =
-        SessionManager.instance.emotorProfile?['id']?.toString().trim();
+    final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']
+        ?.toString()
+        .trim();
     final emotorIdFromUser =
         (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
-            ? (SessionManager.instance.userProfile?['emotor']
-                as Map<String, dynamic>)['id']
-                ?.toString()
-                .trim()
-            : null;
+        ? (SessionManager.instance.userProfile?['emotor']
+                  as Map<String, dynamic>)['id']
+              ?.toString()
+              .trim()
+        : null;
     final emotorId = (preferredEmotorId != null && preferredEmotorId.isNotEmpty)
         ? preferredEmotorId
         : SessionManager.instance.emotorId ??
-            (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
-                ? emotorIdFromProfile
-                : null) ??
-            (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty
-                ? emotorIdFromUser
-                : null) ??
-            ApiConfig.emotorId;
+              (emotorIdFromProfile != null && emotorIdFromProfile.isNotEmpty
+                  ? emotorIdFromProfile
+                  : null) ??
+              (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty
+                  ? emotorIdFromUser
+                  : null) ??
+              ApiConfig.emotorId;
     if (emotorId.isEmpty) return null;
 
     debugPrint(
@@ -683,7 +726,8 @@ class RentalService {
     String? reason,
     String? forcedBy,
   }) async {
-    final emotorId = SessionManager.instance.rental?.emotorId ??
+    final emotorId =
+        SessionManager.instance.rental?.emotorId ??
         SessionManager.instance.emotorId ??
         ApiConfig.emotorId;
     final emotorImei = SessionManager.instance.emotorImei ?? '';
@@ -691,7 +735,9 @@ class RentalService {
       if (rideId != null && rideId.isNotEmpty) 'rideId': rideId,
       if ((rideId == null || rideId.isEmpty) && emotorId.isNotEmpty)
         'emotorId': emotorId,
-      if ((rideId == null || rideId.isEmpty) && emotorId.isEmpty && emotorImei.isNotEmpty)
+      if ((rideId == null || rideId.isEmpty) &&
+          emotorId.isEmpty &&
+          emotorImei.isNotEmpty)
         'imei': emotorImei,
       if (reason != null && reason.isNotEmpty) 'reason': reason,
       if (forcedBy != null && forcedBy.isNotEmpty) 'forcedBy': forcedBy,
@@ -706,7 +752,9 @@ class RentalService {
       auth: true,
       body: body,
     );
-    final ride = res['ride'] is Map<String, dynamic> ? res['ride'] as Map<String, dynamic> : null;
+    final ride = res['ride'] is Map<String, dynamic>
+        ? res['ride'] as Map<String, dynamic>
+        : null;
     return ride?['id']?.toString() ?? rideId ?? emotorId;
   }
 }
