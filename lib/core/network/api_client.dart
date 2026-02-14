@@ -46,7 +46,7 @@ class ApiClient {
   }) async {
     Future<http.Response> request() =>
         _client.get(_buildUri(path, query), headers: _headers(withAuth: auth));
-    return _sendWithRefresh(request);
+    return _sendWithRefresh(request, authRequested: auth);
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -59,12 +59,13 @@ class ApiClient {
       headers: _headers(withAuth: auth),
       body: jsonEncode(body ?? {}),
     );
-    return _sendWithRefresh(request);
+    return _sendWithRefresh(request, authRequested: auth);
   }
 
   Future<Map<String, dynamic>> _sendWithRefresh(
-    Future<http.Response> Function() request,
-  ) async {
+    Future<http.Response> Function() request, {
+    required bool authRequested,
+  }) async {
     if (_debugAuth) {
       debugPrint('==============================');
       debugPrint('➡️ API REQUEST START');
@@ -77,7 +78,7 @@ class ApiClient {
       debugPrint('⬅️ RESPONSE BODY: ${_safeBody(response.body)}');
     }
 
-    if (response.statusCode == 401) {
+    if (authRequested && _shouldRetryWithRefresh(response)) {
       if (_debugAuth) {
         debugPrint('⚠️ 401 detected → Access token might be expired');
       }
@@ -172,11 +173,14 @@ class ApiClient {
       final decoded = jsonDecode(response.body);
       final newAccessToken = decoded['access_token']?.toString() ?? '';
 
-      if (newAccessToken.isEmpty) {
-        if (_debugAuth) {
-          debugPrint('❌ REFRESH FAILED → No access_token returned');
-        }
-        return false;
+      final newRefreshToken = decoded['refresh_token']?.toString() ?? '';
+
+      debugPrint("Refresh failed because status=${response.statusCode}");
+
+      debugPrint("Body=${response.body}");
+
+      if (newRefreshToken.isNotEmpty) {
+        await SessionManager.instance.saveRefreshToken(newRefreshToken);
       }
 
       if (_debugAuth) {
