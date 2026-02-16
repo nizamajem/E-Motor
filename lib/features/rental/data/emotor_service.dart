@@ -32,16 +32,7 @@ class Emotor {
   final String? status;
   final DateTime? createTime;
 
-  bool get isInUse {
-    final value = status?.toLowerCase().trim();
-    if (value == null || value.isEmpty) return false;
-    return value.contains('in_use') ||
-        value.contains('in-use') ||
-        value.contains('using') ||
-        value.contains('running') ||
-        value.contains('active') ||
-        value.contains('on_ride');
-  }
+  bool get isInUse => false;
 }
 
 class EmotorService {
@@ -86,4 +77,69 @@ class EmotorService {
     final data = res['data'] ?? res;
     return Emotor.fromJson(data as Map<String, dynamic>);
   }
+
+  Future<DashboardRefreshData?> fetchDashboardRefresh(String customerId) async {
+    if (customerId.isEmpty) return null;
+    final res = await _client.getJson(
+      '${ApiConfig.refreshDashboardPath}/$customerId',
+      auth: true,
+    );
+    final data = res['data'] ?? res;
+    if (data is! Map<String, dynamic>) return null;
+    return DashboardRefreshData.fromJson(data);
+  }
+}
+
+class DashboardRefreshData {
+  DashboardRefreshData({
+    required this.emotorNumber,
+    required this.packageName,
+    required this.remainingSeconds,
+    required this.validUntil,
+    required this.emissionReduction,
+    required this.rideRange,
+  });
+
+  factory DashboardRefreshData.fromJson(Map<String, dynamic> json) {
+    String text(dynamic value) =>
+        value == null ? '' : value.toString().trim();
+    int toInt(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString()) ?? 0;
+    }
+    double toDouble(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0;
+    }
+
+    final emotorNumber = text(json['emotorNumber'] ?? json['emotor_number']);
+    final packageName = text(json['packageName'] ?? json['package_name']);
+    final remaining =
+        toInt(json['membershipDurationRemaining'] ?? json['durationRemaining']);
+    final validUntil = DateTime.tryParse(
+      text(json['membershipValidUntil'] ?? json['membership_valid_until']),
+    );
+    final emission = toDouble(
+      json['emissionReduction'] ?? json['emission_reduction'],
+    );
+    final rideRange = toInt(json['rideRange'] ?? json['ride_range']);
+
+    return DashboardRefreshData(
+      emotorNumber: emotorNumber,
+      packageName: packageName,
+      remainingSeconds: remaining,
+      validUntil: validUntil,
+      emissionReduction: emission,
+      rideRange: rideRange,
+    );
+  }
+
+  final String emotorNumber;
+  final String packageName;
+  final int remainingSeconds;
+  final DateTime? validUntil;
+  final double emissionReduction;
+  final int rideRange;
 }

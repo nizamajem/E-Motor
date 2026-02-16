@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../rental/data/rental_service.dart';
@@ -8,6 +10,7 @@ import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../components/app_motion.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -136,7 +139,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () {},
+                            onPressed: () => _showContactAdminDialog(
+                              context,
+                              reason: _ContactReason.resetPassword,
+                              username: _usernameController.text.trim(),
+                            ),
                             style: TextButton.styleFrom(
                               foregroundColor: const Color(0xFF2C7BFE),
                               padding: EdgeInsets.zero,
@@ -205,6 +212,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF2C7BFE),
                             ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _showContactAdminDialog(
+                                context,
+                                reason: _ContactReason.newAccount,
+                                username: _usernameController.text.trim(),
+                              ),
                           ),
                         ],
                       ),
@@ -276,11 +289,139 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showAppSnackBar(context, message, isError: true);
   }
 
+}
+
+enum _ContactReason { resetPassword, newAccount }
+
+Future<void> _showContactAdminDialog(
+  BuildContext context, {
+  required _ContactReason reason,
+  String? username,
+}) async {
+  final l10n = AppLocalizations.of(context);
+  const phoneNumber = '+62 821-4454-0304';
+  const waNumber = '6282144540304';
+  final cleanUsername = (username ?? '').trim();
+  final message = reason == _ContactReason.resetPassword
+      ? 'Halo Admin, saya ingin reset password.'
+          '${cleanUsername.isNotEmpty ? ' Username: $cleanUsername.' : ''}'
+      : 'Halo Admin, saya ingin bantuan pembuatan akun.'
+          '${cleanUsername.isNotEmpty ? ' Username: $cleanUsername.' : ''}';
+  final encodedMessage = Uri.encodeComponent(message);
+  final url = Uri.parse('https://wa.me/$waNumber?text=$encodedMessage');
+  await showAppDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) {
+      return Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: Text(
+                      l10n.contactAdminTitle,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: SizedBox(
+                      height: 28,
+                      width: 28,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close),
+                        iconSize: 18,
+                        color: const Color(0xFF111827),
+                        splashRadius: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.contactAdminBody,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF7B8190),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF5FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFD6E4FF)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.chat_bubble_rounded,
+                        color: Color(0xFF25D366), size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      phoneNumber,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(dialogContext).pop();
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C7BFE),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    l10n.contactAdminButton,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12.8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _InputField extends StatelessWidget {

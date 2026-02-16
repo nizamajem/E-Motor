@@ -4,10 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../auth/presentation/login_screen.dart';
+import '../../membership/presentation/membership_screen.dart';
+import '../../recharge/presentation/recharge_screen.dart';
+import '../../profile/presentation/document_screen.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../components/active_rental_logout_dialog.dart';
 import '../../../components/logout_dialog.dart';
+import '../../../components/app_motion.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
 
@@ -53,12 +57,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final profile = SessionManager.instance.userProfile ?? {};
     final l10n = AppLocalizations.of(context);
+    final walletBalance = SessionManager.instance.walletBalance ?? 0;
+    final verificationStatus =
+        SessionManager.instance.customerVerificationStatus;
     final username = readText(profile['username']);
     final fullName = readText(profile['full_name']);
     final email = readText(profile['email']);
     final phone = readText(profile['phone_number']);
     final gender = readText(profile['gender']);
-    final idCard = readText(profile['id_card']);
+    final idCard = readText(profile['id_number']);
     final birthday = formatDate(profile['birthday']);
     final height = readText(profile['height']);
     final weight = readText(profile['weight']);
@@ -67,6 +74,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         username ?? SessionManager.instance.user?.name ?? 'User';
 
     final entries = <_ProfileEntry>[
+      _ProfileEntry(
+        l10n.verifyDocuments,
+        _verificationLabel(l10n, verificationStatus),
+        Icons.verified_user_outlined,
+        showChevron: true,
+        isVerifyDocs: true,
+      ),
       if (displayName.isNotEmpty)
         _ProfileEntry(l10n.displayName, displayName, Icons.person_rounded),
       if (fullName != null)
@@ -117,7 +131,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     email: email ?? '-',
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _WalletCard(
+                    balance: walletBalance,
+                    balanceLabel: l10n.balance,
+                    topUpLabel: l10n.topUp,
+                    packageLabel: l10n.packageLabel,
+                    onTopUp: () {
+                      Navigator.of(context).push(
+                        appRoute(
+                          const RechargeScreen(),
+                          direction: AxisDirection.left,
+                        ),
+                      );
+                    },
+                    onPackage: () {
+                      Navigator.of(context).push(
+                        appRoute(
+                          const MembershipScreen(),
+                          direction: AxisDirection.left,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Expanded(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -154,27 +194,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: AppBottomNav(
-                    activeTab: BottomNavTab.profile,
-                    onHistoryTap: () {
-                      Navigator.of(context).pushReplacement(
-                        appRoute(const HistoryScreen(),
-                            direction: AxisDirection.right),
-                      );
-                    },
-                    onDashboardTap: () {
-                      Navigator.of(context).pushReplacement(
-                        appRoute(const DashboardScreen(),
-                            direction: AxisDirection.right),
-                      );
-                    },
-                    onProfileTap: () {},
-                  ),
+                AppBottomNav(
+                  activeTab: BottomNavTab.profile,
+                  onHistoryTap: () {
+                    Navigator.of(context).pushReplacement(
+                      appRoute(const HistoryScreen(),
+                          direction: AxisDirection.right),
+                    );
+                  },
+                  onDashboardTap: () {
+                    Navigator.of(context).pushReplacement(
+                      appRoute(const DashboardScreen(),
+                          direction: AxisDirection.right),
+                    );
+                  },
+                  onProfileTap: () {},
                 ),
-                const SizedBox(height: 14),
               ],
             ),
           ],
@@ -183,6 +218,197 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String _verificationLabel(AppLocalizations l10n, String status) {
+    switch (status) {
+      case 'verified':
+        return l10n.verified;
+      case 'under_review':
+        return l10n.underReview;
+      default:
+        return l10n.notVerified;
+    }
+  }
+
+}
+
+class _WalletCard extends StatelessWidget {
+  const _WalletCard({
+    required this.balance,
+    required this.balanceLabel,
+    required this.topUpLabel,
+    required this.packageLabel,
+    required this.onTopUp,
+    required this.onPackage,
+  });
+
+  final int balance;
+  final String balanceLabel;
+  final String topUpLabel;
+  final String packageLabel;
+  final VoidCallback onTopUp;
+  final VoidCallback onPackage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A2C7BFE),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFFE3EAF5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 40,
+            width: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2C7BFE), Color(0xFF6CD2FF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x332C7BFE),
+                  blurRadius: 10,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.account_balance_wallet_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  balanceLabel,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF8B93A4),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _formatRupiah(balance),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _WalletAction(
+            icon: Icons.account_balance_wallet_outlined,
+            label: topUpLabel,
+            onTap: onTopUp,
+          ),
+          const SizedBox(width: 6),
+          _WalletAction(
+            icon: Icons.local_offer_outlined,
+            label: packageLabel,
+            onTap: onPackage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatRupiah(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final idx = digits.length - i;
+      buffer.write(digits[i]);
+      if (idx > 1 && idx % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+    return 'Rp ${buffer.toString()}';
+  }
+}
+
+class _WalletAction extends StatelessWidget {
+  const _WalletAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Column(
+          children: [
+            Container(
+              height: 30,
+              width: 30,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEAF1FF), Color(0xFFFFFFFF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDCE6F4)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: const Color(0xFF2C7BFE),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF2C7BFE),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ProfileBackground extends StatelessWidget {
@@ -314,6 +540,8 @@ class _ProfileEntry {
     this.icon, {
     this.isDestructive = false,
     this.isLogout = false,
+    this.showChevron = false,
+    this.isVerifyDocs = false,
   });
 
   final String title;
@@ -321,6 +549,8 @@ class _ProfileEntry {
   final IconData icon;
   final bool isDestructive;
   final bool isLogout;
+  final bool showChevron;
+  final bool isVerifyDocs;
 }
 
 class _ProfileRow extends StatelessWidget {
@@ -375,7 +605,7 @@ class _ProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (isEditable || isDelete)
+            if (isEditable || isDelete || entry.showChevron)
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
@@ -391,7 +621,7 @@ class _ProfileRow extends StatelessWidget {
 }
 
 Future<void> _showLogoutDialog(BuildContext context) {
-  return showDialog(
+  return showAppDialog(
     context: context,
     barrierDismissible: true,
     builder: (_) => LogoutDialog(
@@ -409,7 +639,7 @@ Future<void> _showLogoutDialog(BuildContext context) {
 }
 
 Future<void> _showActiveRentalLogoutDialog(BuildContext context) {
-  return showDialog(
+  return showAppDialog(
     context: context,
     barrierDismissible: true,
     builder: (_) => const ActiveRentalLogoutDialog(),
@@ -423,6 +653,13 @@ void _handleTap(BuildContext context, _ProfileEntry entry) {
     } else {
       _showLogoutDialog(context);
     }
+  } else if (entry.isVerifyDocs) {
+    Navigator.of(context).push(
+      appRoute(
+        const DocumentScreen(),
+        direction: AxisDirection.left,
+      ),
+    );
   } else {
     // Non-editable fields are shown only; editable ones use header pencil.
   }

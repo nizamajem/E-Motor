@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/localization/app_localizations.dart';
+import 'app_motion.dart';
 
 enum EndRentalNoticeType {
   turnOffRequired,
@@ -20,7 +21,7 @@ class EndRentalNoticeDialog extends StatelessWidget {
     BuildContext context, {
     required EndRentalNoticeType type,
   }) {
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
       builder: (dialogContext) => EndRentalNoticeDialog(type: type),
     );

@@ -5,6 +5,8 @@ import 'widgets/onboarding_card.dart';
 import 'widgets/page_indicator.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/navigation/app_route.dart';
+import '../../../core/session/session_manager.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -139,9 +141,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _handleFinish() {
+    SessionManager.instance.setOnboardingSeen(true);
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
+      appRoute(
+        const LoginScreen(),
+        direction: AxisDirection.left,
       ),
     );
   }

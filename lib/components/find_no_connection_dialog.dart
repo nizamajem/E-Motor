@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'app_motion.dart';
+
 Future<void> showFindNoConnectionDialog(BuildContext context) async {
   StreamSubscription<List<ConnectivityResult>>? sub;
   try {
-    await showDialog(
+    await showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {

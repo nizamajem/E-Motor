@@ -69,6 +69,62 @@ class HistoryService {
     return [];
   }
 
+  Future<List<MembershipHistoryEntry>> fetchMembershipHistoryByCustomer(
+    String customerId,
+  ) async {
+    if (SessionManager.instance.token == null) return [];
+    if (customerId.isEmpty) return [];
+    Map<String, dynamic> res;
+    try {
+      res = await _client.getJson(
+        '${ApiConfig.membershipHistoryByCustomerPath}/$customerId',
+        auth: true,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return [];
+      rethrow;
+    } on FormatException {
+      return [];
+    }
+    final data = res['data'] ?? res;
+    if (data is List) {
+      return data
+          .map((e) => MembershipHistoryEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    if (data is Map<String, dynamic>) {
+      return [MembershipHistoryEntry.fromJson(data)];
+    }
+    return [];
+  }
+
+  Future<List<HistoryEntry>> fetchCyclingByMembership(String membershipId) async {
+    if (SessionManager.instance.token == null) return [];
+    if (membershipId.isEmpty) return [];
+    Map<String, dynamic> res;
+    try {
+      res = await _client.getJson(
+        '${ApiConfig.historyByMembershipPath}/$membershipId',
+        auth: true,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return [];
+      rethrow;
+    } on FormatException {
+      return [];
+    }
+    final data = res['data'] ?? res;
+    if (data is List) {
+      return data
+          .map((e) => HistoryEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    if (data is Map<String, dynamic>) {
+      return [HistoryEntry.fromJson(data)];
+    }
+    return [];
+  }
+
   Stream<List<HistoryEntry>> streamHistory(
       {Duration interval = const Duration(seconds: 6)}) {
     return Stream.periodic(interval).asyncMap((_) => fetchHistory());

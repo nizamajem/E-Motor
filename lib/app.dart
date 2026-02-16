@@ -7,6 +7,7 @@ import 'core/session/session_manager.dart';
 import 'core/localization/app_localizations.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
+import 'features/auth/presentation/login_screen.dart';
 
 class EMotorApp extends StatelessWidget {
   const EMotorApp({super.key});
@@ -14,19 +15,32 @@ class EMotorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSession = SessionManager.instance.token != null;
+    final seenOnboarding = SessionManager.instance.onboardingSeen;
     return MaterialApp(
       title: 'Gridwiz E-Motor',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       navigatorKey: AppNavigator.key,
       supportedLocales: AppLocalizations.supportedLocales,
+      localeResolutionCallback: (locale, supported) {
+        final code = locale?.languageCode.toLowerCase() ?? 'en';
+        if (code == 'id') {
+          return const Locale('id');
+        }
+        if (code == 'en') {
+          return const Locale('en');
+        }
+        return const Locale('en');
+      },
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: hasSession ? const DashboardScreen() : const OnboardingScreen(),
+      home: seenOnboarding
+          ? (hasSession ? const DashboardScreen() : const LoginScreen())
+          : const OnboardingScreen(),
     );
   }
 }

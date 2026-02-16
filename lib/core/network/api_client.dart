@@ -12,6 +12,7 @@ class ApiClient {
 
   final http.Client _client;
   static Future<bool>? _refreshInFlight;
+  static const int _maxRefreshAttempts = 3;
 
   Future<bool> refreshAccessToken() async => _refreshToken();
 
@@ -25,6 +26,8 @@ class ApiClient {
     final token = SessionManager.instance.token;
     if (withAuth && token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
+    } else if (withAuth && kDebugMode) {
+      debugPrint('auth header missing: tokenLength=${token?.length ?? 0}');
     }
     return headers;
   }
@@ -38,7 +41,7 @@ class ApiClient {
           _buildUri(path, query),
           headers: _headers(withAuth: auth),
         );
-    return _sendWithRefresh(request);
+    return _sendWithRefresh(request, authRequested: auth);
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -51,14 +54,19 @@ class ApiClient {
           headers: _headers(withAuth: auth),
           body: jsonEncode(body ?? {}),
         );
-    return _sendWithRefresh(request);
+    return _sendWithRefresh(request, authRequested: auth);
   }
 
   Future<Map<String, dynamic>> _sendWithRefresh(
     Future<http.Response> Function() request,
+    {required bool authRequested}
   ) async {
     var response = await request();
-    if (_shouldRetryWithRefresh(response)) {
+    if (kDebugMode && (response.statusCode == 401 || response.statusCode == 403)) {
+      debugPrint('${response.statusCode} received: url=${response.request?.url}');
+      debugPrint('${response.statusCode} body=${_safeBody(response.body)}');
+    }
+    if (authRequested && _shouldRetryWithRefresh(response)) {
       final refreshed = await _refreshToken();
       if (refreshed) {
         response = await request();
@@ -69,26 +77,37 @@ class ApiClient {
 
   bool _shouldRetryWithRefresh(http.Response response) {
     final status = response.statusCode;
-    if (status != 401) return false;
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded['code']?.toString() == 'ACCESS_TOKEN_EXPIRED';
-      }
-    } catch (_) {}
-    return false;
+    return status == 401;
   }
 
   Future<bool> _refreshToken() async {
     final refreshToken = SessionManager.instance.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) return false;
-    _refreshInFlight ??= _performRefresh(refreshToken);
+    _refreshInFlight ??= _performRefreshWithRetry(refreshToken);
     final result = await _refreshInFlight!;
     _refreshInFlight = null;
     return result;
   }
 
-  Future<bool> _performRefresh(String refreshToken) async {
+  Future<bool> _performRefreshWithRetry(String refreshToken) async {
+    for (var attempt = 1; attempt <= _maxRefreshAttempts; attempt++) {
+      final success = await _performRefreshOnce(refreshToken);
+      if (success) return true;
+      if (attempt < _maxRefreshAttempts) {
+        await Future<void>.delayed(const Duration(seconds: 6));
+      }
+    }
+    if (kDebugMode) {
+      debugPrint('refresh failed after $_maxRefreshAttempts attempts');
+    }
+    SessionManager.instance.clearAuth();
+    await AppNavigator.showRefreshDialog(
+      'Refresh token gagal. Silakan login ulang.',
+    );
+    return false;
+  }
+
+  Future<bool> _performRefreshOnce(String refreshToken) async {
     try {
       var response = await _client.post(
         _buildUri(ApiConfig.refreshMobilePath),
@@ -101,10 +120,6 @@ class ApiClient {
         'refresh-mobile response: status=${response.statusCode} body=${_safeBody(response.body)}',
       );
       if (response.statusCode == 401) {
-        SessionManager.instance.clearAuth();
-        await AppNavigator.showRefreshDialog(
-          'Refresh token gagal. Silakan login ulang.',
-        );
         return false;
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -114,6 +129,9 @@ class ApiClient {
       if (newToken.isEmpty) return false;
       _logTokenTimes('refresh', newToken);
       await SessionManager.instance.saveToken(newToken);
+      if (kDebugMode) {
+        debugPrint('refresh success accessTokenLen=${newToken.length}');
+      }
       return true;
     } catch (_) {
       return false;

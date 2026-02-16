@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../components/find_no_connection_dialog.dart';
 import '../../../components/loading_dialog.dart';
 import '../../../components/no_internet_dialog.dart';
+import '../../../components/app_motion.dart';
 import '../../../core/network/network_utils.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../history/data/history_service.dart';
@@ -14,9 +16,9 @@ import '../../profile/presentation/profile_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../rental/data/emotor_service.dart';
 import '../../rental/data/rental_service.dart';
-import '../../history/presentation/detail_history_screen.dart';
+import '../../membership/presentation/membership_screen.dart';
+import '../../membership/data/membership_check_service.dart';
 import '../../../components/bottom_nav.dart';
-import '../../../components/end_rental_notice.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/session/session_manager.dart';
@@ -35,8 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
   bool _isActive = false;
   bool _isToggling = false;
-  bool _isEnding = false;
-  bool _isStartingRide = false;
   bool _isFinding = false;
   bool _hasRental = false;
   bool _requireStart = false;
@@ -44,6 +44,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   RideStatus? _status;
   RentalSession? _rental;
   final RentalService _rentalService = RentalService();
+  final MembershipCheckService _membershipCheckService =
+      MembershipCheckService();
+  final EmotorService _emotorService = EmotorService();
   StreamSubscription<RideStatus>? _statusSub;
   Timer? _timer;
   static const Duration kIoTCommandTimeout = Duration(seconds: 12);
@@ -63,7 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
     _hasRental = _rental != null;
-    _requireStart = !_hasRental;
+    _requireStart = !_hasRental && !SessionManager.instance.hasActivePackage;
     _elapsedSeconds = 0;
     final startedAt = SessionManager.instance.rentalStartedAt;
     if (_hasRental && startedAt != null) {
@@ -74,6 +77,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     _ensureTimer();
     _bootstrapRental();
+    _checkMembershipStatus();
+    _refreshDashboard();
   }
 
   @override
@@ -119,10 +124,54 @@ class _DashboardScreenState extends State<DashboardScreen>
         _ensureTimer();
         _statusSub?.cancel();
         await _bootstrapRental();
+      } else {
+        setState(() {
+          _requireStart = !SessionManager.instance.hasActivePackage;
+        });
       }
+      _checkMembershipStatus();
+      _refreshDashboard();
     } finally {
       _resumeInProgress = false;
     }
+  }
+
+  Future<void> _checkMembershipStatus() async {
+    final customerId = SessionManager.instance.customerId ?? '';
+    if (customerId.isEmpty || SessionManager.instance.token == null) return;
+    try {
+      final hasMembership =
+          await _membershipCheckService.checkMembership(customerId: customerId);
+      if (!mounted || hasMembership == null) return;
+      SessionManager.instance.setHasActivePackage(hasMembership);
+      if (mounted) {
+        setState(() {
+          _requireStart = !hasMembership;
+        });
+        _ensureTimer();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _refreshDashboard() async {
+    final customerId = SessionManager.instance.customerId ?? '';
+    if (customerId.isEmpty || SessionManager.instance.token == null) return;
+    try {
+      final data = await _emotorService.fetchDashboardRefresh(customerId);
+      if (data == null) return;
+      await SessionManager.instance.setDashboardData(
+        emotorNumber: data.emotorNumber,
+        packageName: data.packageName,
+        remainingSeconds: data.remainingSeconds,
+        validUntil: data.validUntil,
+        emissionReduction: data.emissionReduction,
+        rideRange: data.rideRange,
+      );
+      if (mounted) {
+        setState(() {});
+        _ensureTimer();
+      }
+    } catch (_) {}
   }
 
   Future<void> _bootstrapRental() async {
@@ -374,14 +423,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (mounted) {
       setState(() {
         _isToggling = false;
-        _isEnding = false;
-        _isStartingRide = false;
         _isFinding = false;
       });
     }
     SessionManager.instance.clearAuth();
     if (!mounted) return;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -490,11 +537,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       return fallback;
     }
 
-    final dimmed = !_isActive;
     final rental = _rental;
     final status = _status;
     final riderName = SessionManager.instance.user?.name ?? 'Rider';
-    final l10n = AppLocalizations.of(context);
     final emotorFromProfile = SessionManager.instance.emotorProfile;
     final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
     final emotorPlate =
@@ -519,7 +564,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   emotorFromUser['model']?.toString().trim() ??
                   emotorFromUser['name']?.toString().trim())
             : null);
-    final emotorFallback = (emotorPlate != null && emotorPlate.isNotEmpty)
+    final dashboardNumber = SessionManager.instance.dashboardEmotorNumber;
+    final emotorFallback = (dashboardNumber != null && dashboardNumber.isNotEmpty)
+        ? dashboardNumber
+        : (emotorPlate != null && emotorPlate.isNotEmpty)
         ? emotorPlate
         : (emotorName != null && emotorName.isNotEmpty)
         ? emotorName
@@ -537,125 +585,65 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           const _Background(),
           SafeArea(
-            child: Column(
+            child: Stack(
               children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      AbsorbPointer(
+                Column(
+                  children: [
+                    Expanded(
+                      child: AbsorbPointer(
                         absorbing: _requireStart,
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 10),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                              ),
-                              child: Column(
-                                children: [
-                                  RichText(
-                                    text: TextSpan(
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.black,
-                                      ),
-                                      children: [
-                                        TextSpan(text: l10n.welcome),
-                                        TextSpan(
-                                          text: riderName,
-                                          style: const TextStyle(
-                                            color: Color(0xFF2C7BFE),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    l10n.tagline,
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade600,
-                                      height: 1.45,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: [
-                                    _ScooterHero(isActive: _isActive),
-                                    const SizedBox(height: 8),
-                                    _PlateBadge(
-                                      isActive: _isActive,
-                                      plate: plateText,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _GridCards(
-                                      status: status,
-                                      rental: rental,
-                                      isActive: _isActive,
-                                      dimmed: dimmed,
-                                      isBusy: _isToggling,
-                                      isEnding: _isEnding,
-                                      isFinding: _isFinding,
-                                      elapsedSeconds: _elapsedSeconds,
-                                      rentalStartedAt: rentalStartedAt,
-                                      hasRental: _hasRental,
-                                      onEnd: _handleEndRental,
-                                      onFind: _handleFind,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _PowerButtons(
-                                      isActive: _isActive,
-                                      disabled: _isToggling,
-                                      onToggle: _handleToggle,
-                                    ),
-                                    const SizedBox(height: 12),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: _NewDashboardContent(
+                          riderName: riderName,
+                          plateText: plateText,
+                          isActive: _isActive,
+                          isFinding: _isFinding,
+                          isToggling: _isToggling,
+                          elapsedSeconds: _elapsedSeconds,
+                          rentalStartedAt: rentalStartedAt,
+                          status: status,
+                          rental: rental,
+                          onFind: _handleFind,
+                          onToggle: _handleToggle,
+                          onViewPackage: _handleGetPackages,
+                          onChangeMotor: _showChangeMotorDialog,
                         ),
                       ),
-                      if (_requireStart)
-                        Positioned.fill(
-                          child: _StartRideOverlay(
-                            isLoading: _isStartingRide,
-                            onStart: _handleStartRide,
-                          ),
+                    ),
+                    const SizedBox(height: 72),
+                  ],
+                ),
+                if (_requireStart)
+                  Positioned.fill(
+                    child: _StartRideOverlay(
+                      isLoading: false,
+                      onStart: _handleGetPackages,
+                    ),
+                  ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AppBottomNav(
+                    activeTab: BottomNavTab.dashboard,
+                    onHistoryTap: () {
+                      Navigator.of(context).push(
+                        appRoute(
+                          const HistoryScreen(),
+                          direction: AxisDirection.left,
                         ),
-                    ],
+                      );
+                    },
+                    onDashboardTap: () {},
+                    onProfileTap: () {
+                      Navigator.of(context).push(
+                        appRoute(
+                          const ProfileScreen(),
+                          direction: AxisDirection.left,
+                        ),
+                      );
+                    },
                   ),
                 ),
-                AppBottomNav(
-                  activeTab: BottomNavTab.dashboard,
-                  onHistoryTap: () {
-                    Navigator.of(context).push(
-                      appRoute(
-                        const HistoryScreen(),
-                        direction: AxisDirection.left,
-                      ),
-                    );
-                  },
-                  onDashboardTap: () {},
-                  onProfileTap: () {
-                    Navigator.of(context).push(
-                      appRoute(
-                        const ProfileScreen(),
-                        direction: AxisDirection.left,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -741,7 +729,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       _showSnack(l10n.errorVehicleNotResponding);
     }
     // 5️⃣ ERROR LAIN (API / IOT)
-    catch (e) {
+    catch (_) {
       if (!mounted) return;
       hideLoadingDialog(context);
       _showSnack(l10n.errorNetworkGeneric);
@@ -753,9 +741,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, message);
   }
 
   Future<void> _handleFind() async {
@@ -788,7 +774,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
       // 5️⃣ JIKA BERHASIL → TAMPILKAN POPUP FIND YANG SEKARANG
       if (ok) {
-        showDialog<void>(
+        showAppDialog<void>(
           context: context,
           builder: (dialogContext) {
             final dialogL10n = AppLocalizations.of(dialogContext);
@@ -891,7 +877,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       } else {
         _showSnack(l10n.findEmotorFailed);
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       hideLoadingDialog(context);
       _showSnack(l10n.findEmotorFailed);
@@ -903,9 +889,17 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _ensureTimer() {
-    if (_timer != null || !_hasRental) return;
+    final hasCountdown = _hasRental ||
+        SessionManager.instance.membershipExpiresAt != null;
+    if (_timer != null || !hasCountdown) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
+      if (!_hasRental &&
+          SessionManager.instance.membershipExpiresAt == null) {
+        _timer?.cancel();
+        _timer = null;
+        return;
+      }
       setState(() {
         final startedAt = SessionManager.instance.rentalStartedAt;
         if (startedAt != null) {
@@ -920,43 +914,157 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
   }
 
-  Future<void> _handleStartRide() async {
+  void _handleGetPackages() {
+    Navigator.of(context).push(
+      appRoute(
+        const MembershipScreen(),
+        direction: AxisDirection.left,
+      ),
+    );
+  }
+
+  void _showChangeMotorDialog() {
+    showAppDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _ChangeMotorDialog(
+          onClose: () => Navigator.of(dialogContext).pop(),
+          onContact: () {
+            Navigator.of(dialogContext).pop();
+            _showContactOperatorDialog(context);
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showContactOperatorDialog(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    if (_isStartingRide) return;
-    setState(() => _isStartingRide = true);
-    try {
-      final rental = await _rentalService.startRental();
-      if (!mounted) return;
-      setState(() {
-        _rental = rental;
-        _hasRental = true;
-        _elapsedSeconds = 0;
-        _requireStart = false;
-      });
-      SessionManager.instance.setRentalStartedAt(DateTime.now());
-      _ensureTimer();
-      _startStatusListener();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.statusCode == 401 || e.statusCode == 403) {
-        _handleAuthExpired();
-      } else {
-        _showSnack('${l10n.startRideFailed}$e');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack('${l10n.startRideFailed}$e');
-    } finally {
-      if (mounted) {
-        setState(() => _isStartingRide = false);
-      }
-    }
+    const phoneNumber = '+62 821-4454-0304';
+    const waNumber = '6282144540304';
+    final message = Uri.encodeComponent(
+      'Halo Operator, saya butuh bantuan untuk penggantian motor.',
+    );
+    final url = Uri.parse('https://wa.me/$waNumber?text=$message');
+    await showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        l10n.contactOperator,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: SizedBox(
+                        height: 28,
+                        width: 28,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          icon: const Icon(Icons.close),
+                          iconSize: 18,
+                          color: const Color(0xFF111827),
+                          splashRadius: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.contactOperatorBody,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7B8190),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF5FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFD6E4FF)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.chat_bubble_rounded,
+                          color: Color(0xFF25D366), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        phoneNumber,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF111827),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.of(dialogContext).pop();
+                      await launchUrl(
+                        url,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.contactAdminButton,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<bool?> showEndRentalConfirmDialog(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return showDialog<bool>(
+    return showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -1039,141 +1147,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Future<void> _handleEndRental() async {
-    final l10n = AppLocalizations.of(context);
-    if (_isEnding) return;
 
-    final status = _status;
-    if (_isActive || (status?.hasMotorState == true && status!.motorOn)) {
-      await EndRentalNoticeDialog.show(
-        context,
-        type: EndRentalNoticeType.turnOffRequired,
-      );
-      if (!mounted) return;
-      return;
-    }
-
-    // 1️⃣ KONFIRMASI DULU
-    final confirmed = await showEndRentalConfirmDialog(context);
-    if (!mounted) return;
-    if (confirmed != true) return;
-
-    setState(() => _isEnding = true);
-
-    // 2️⃣ TAMPILKAN LOADING
-    showLoadingDialog(context, message: l10n.loadingEndingRental);
-
-    try {
-      // 3️⃣ END RENTAL
-      final endedRideId = await _endRentalWithRetry();
-
-      if (!mounted) return;
-      if (endedRideId == null) {
-        hideLoadingDialog(context);
-        _showSnack(l10n.endRentalFailed);
-        return;
-      }
-
-      hideLoadingDialog(context);
-
-      _statusSub?.cancel();
-      _timer?.cancel();
-
-      final history = await HistoryService().fetchHistoryById(endedRideId);
-
-      if (!mounted) return;
-
-      if (history.isEmpty) {
-        _statusSub?.cancel();
-        _timer?.cancel();
-        setState(() {
-          _rental = null;
-          _status = null;
-          _hasRental = false;
-          _requireStart = true;
-          _elapsedSeconds = 0;
-          _isActive = false;
-        });
-        SessionManager.instance.clearRental();
-        SessionManager.instance.setRentalStartedAt(null);
-        _showSnack(l10n.errorHistoryNotFound);
-        return;
-      }
-
-      final entry = history.first;
-
-      final item = HistoryItem(
-        id: entry.id,
-        date: entry.date,
-        durationAndCost: entry.durationAndCost,
-        distanceKm: entry.distanceKm,
-        plate: entry.plate,
-        rentalDuration: entry.rentalDuration,
-        emission: entry.emission,
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        startPlace: entry.startPlace,
-        endPlace: entry.endPlace,
-        rideCost: entry.rideCost,
-        idleCost: entry.idleCost,
-        totalCost: entry.totalCost,
-      );
-
-      setState(() {
-        _rental = null;
-        _status = null;
-        _hasRental = false;
-        _requireStart = true;
-        _elapsedSeconds = 0;
-      });
-
-      SessionManager.instance.clearRental();
-      SessionManager.instance.setRentalStartedAt(null);
-
-      Navigator.of(context).push(
-        appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
-      );
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      hideLoadingDialog(context);
-      if (e.statusCode == 401 || e.statusCode == 403) {
-        _handleAuthExpired();
-      } else if (e.statusCode == 404 || e.statusCode == 410) {
-        _handleRemoteEnd();
-      } else {
-        _showSnack('${l10n.endRentalFailed}$e');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      hideLoadingDialog(context);
-      _showSnack('${l10n.endRentalFailed}$e');
-    } finally {
-      if (mounted) {
-        setState(() => _isEnding = false);
-      }
-    }
-  }
-
-  Future<String?> _endRentalWithRetry() async {
-    const maxAttempts = 3;
-    var attempt = 0;
-    while (mounted && attempt < maxAttempts) {
-      try {
-        return await _rentalService.endRental();
-      } on ApiException catch (e) {
-        attempt += 1;
-        if (attempt < maxAttempts) {
-          await Future<void>.delayed(const Duration(seconds: 2));
-          continue;
-        }
-        rethrow;
-      }
-    }
-    return null;
-  }
 
   Future<bool?> showTurnOffConfirmDialog(BuildContext context) {
-    return showDialog<bool>(
+    return showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
@@ -1193,10 +1170,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   width: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFFFFA45B),
+                    color: const Color(0xFFE34A43),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x33FFA45B),
+                        color: Color(0x33E34A43),
                         blurRadius: 14,
                         offset: Offset(0, 6),
                       ),
@@ -1257,7 +1234,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(dialogContext).pop(true),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFA45B),
+                          backgroundColor: const Color(0xFFE34A43),
                           padding: const EdgeInsets.symmetric(vertical: 11),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -1314,44 +1291,96 @@ class _StartRideOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white.withValues(alpha: 0.7),
+      color: Colors.black.withValues(alpha: 0.4),
       child: Center(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x1A000000),
-                blurRadius: 18,
-                offset: Offset(0, 10),
+                blurRadius: 20,
+                offset: Offset(0, 12),
               ),
             ],
-            border: Border.all(color: const Color(0xFFE7EBF3)),
+            border: Border.all(color: const Color(0xFFF0F2F6)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                AppLocalizations.of(context).startRideTitle,
-                style: GoogleFonts.poppins(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87,
-                ),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Text(
+                      AppLocalizations.of(context).startRideTitle,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1B1F2A),
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: SizedBox(
+                      height: 28,
+                      width: 28,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: null,
+                        icon: const Icon(Icons.close),
+                        iconSize: 18,
+                        color: const Color(0xFF222222),
+                        disabledColor: const Color(0xFF222222),
+                        splashRadius: 18,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 AppLocalizations.of(context).startRideBody,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade600,
+                  color: const Color(0xFF6B7280),
                   height: 1.4,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    height: 132,
+                    width: 132,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFEFF4FF),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2C7BFE)
+                              .withValues(alpha: 0.14),
+                          blurRadius: 22,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Image.asset(
+                    'assets/images/buy.png',
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1361,9 +1390,9 @@ class _StartRideOverlay extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2C7BFE),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 0,
                   ),
@@ -1379,8 +1408,8 @@ class _StartRideOverlay extends StatelessWidget {
                       : Text(
                           AppLocalizations.of(context).startRideButton,
                           style: GoogleFonts.poppins(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 13.8,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                 ),
@@ -1393,235 +1422,490 @@ class _StartRideOverlay extends StatelessWidget {
   }
 }
 
-class _ScooterHero extends StatelessWidget {
-  const _ScooterHero({required this.isActive});
+class _NewDashboardContent extends StatelessWidget {
+  const _NewDashboardContent({
+    required this.riderName,
+    required this.plateText,
+    required this.isActive,
+    required this.isFinding,
+    required this.isToggling,
+    required this.elapsedSeconds,
+    required this.rentalStartedAt,
+    required this.status,
+    required this.rental,
+    required this.onFind,
+    required this.onToggle,
+    required this.onViewPackage,
+    required this.onChangeMotor,
+  });
 
+  final String riderName;
+  final String plateText;
   final bool isActive;
+  final bool isFinding;
+  final bool isToggling;
+  final int elapsedSeconds;
+  final DateTime? rentalStartedAt;
+  final RideStatus? status;
+  final RentalSession? rental;
+  final VoidCallback onFind;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onViewPackage;
+  final VoidCallback onChangeMotor;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 180,
-      child: Stack(
-        alignment: Alignment.center,
+    final l10n = AppLocalizations.of(context);
+    final carbonReduction = SessionManager.instance.dashboardEmission ??
+        status?.carbonReduction ??
+        0;
+    final rangeKm = SessionManager.instance.dashboardRideRange ??
+        (status?.rangeKm ?? 0).round();
+    final rideSeconds = elapsedSeconds;
+    final needToPayAmount = status?.amountPaid ?? 0;
+    final expiresAt = SessionManager.instance.membershipExpiresAt;
+    final membershipName =
+        SessionManager.instance.membershipName ?? l10n.packageDefault;
+    final remainingSeconds =
+        SessionManager.instance.dashboardRemainingSeconds ??
+            _remainingSecondsFromExpiry(expiresAt);
+    String formatCountdown(int seconds) {
+      if (seconds < 0) seconds = 0;
+      final hours = seconds ~/ 3600;
+      final minutes = (seconds % 3600) ~/ 60;
+      final secs = seconds % 60;
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+      child: Column(
         children: [
-          Positioned(
-            top: 38,
-            child: Container(
-              width: 174,
-              height: 174,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFE7F1FF),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(
-                      0xFF2C7BFE,
-                    ).withValues(alpha: isActive ? 0.16 : 0.08),
-                    blurRadius: 26,
-                    spreadRadius: 5,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-            ),
+          _DashboardHeaderCard(
+            plateText: plateText,
+            isActive: isActive,
+            expiresAt: expiresAt,
+            remainingSeconds: remainingSeconds,
+            needToPayAmount: needToPayAmount,
+            onViewPackage: onViewPackage,
+            rideHeader: l10n.rideHeader,
+            packageLabel: membershipName,
+            viewPackageLabel: l10n.viewPackage,
+            expiresLabel: l10n.packageExpires,
+            remainingLabel: l10n.additionalPay,
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Image.asset(
-              'assets/images/dashboard.png',
-              height: 135,
-              fit: BoxFit.contain,
-            ),
+          const SizedBox(height: 16),
+          _StatGrid(
+            carbonReduction: carbonReduction,
+            rangeKm: rangeKm,
+            rideSeconds: rideSeconds,
+            isFinding: isFinding,
+            onFind: onFind,
+            carbonLabel: l10n.emissionReduction,
+            findLabel: l10n.findEmotor,
+            findingLabel: l10n.finding,
+            rangeLabel: l10n.rangeLabel,
+            rideTimeLabel: l10n.timeLeft,
+            rideTimeValue: formatCountdown(remainingSeconds),
+          ),
+          const SizedBox(height: 12),
+          _ActionRow(
+            isActive: isActive,
+            isToggling: isToggling,
+            onToggle: onToggle,
+            onLabel: l10n.on,
+            offLabel: l10n.off,
+          ),
+          const SizedBox(height: 10),
+          _OutlineButton(
+            label: l10n.changeMotor,
+            icon: Icons.cached_rounded,
+            onTap: onChangeMotor,
           ),
         ],
       ),
     );
   }
+
+  int _remainingSecondsFromExpiry(DateTime? expiresAt) {
+    if (expiresAt == null) return 0;
+    final diff = expiresAt.difference(DateTime.now());
+    if (diff.isNegative) return 0;
+    return diff.inSeconds;
+  }
+
 }
 
-class _PlateBadge extends StatelessWidget {
-  const _PlateBadge({required this.isActive, required this.plate});
+class _DashboardHeaderCard extends StatelessWidget {
+  const _DashboardHeaderCard({
+    required this.plateText,
+    required this.isActive,
+    required this.expiresAt,
+    required this.remainingSeconds,
+    required this.needToPayAmount,
+    required this.onViewPackage,
+    required this.rideHeader,
+    required this.packageLabel,
+    required this.viewPackageLabel,
+    required this.expiresLabel,
+    required this.remainingLabel,
+  });
 
+  final String plateText;
   final bool isActive;
-  final String plate;
+  final DateTime? expiresAt;
+  final int remainingSeconds;
+  final double needToPayAmount;
+  final VoidCallback onViewPackage;
+  final String rideHeader;
+  final String packageLabel;
+  final String viewPackageLabel;
+  final String expiresLabel;
+  final String remainingLabel;
 
   @override
   Widget build(BuildContext context) {
-    final muted = !isActive;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F7FB),
-        borderRadius: BorderRadius.circular(14),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF78C9F4), Color(0xFF4A8CFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A2C7BFE),
+            blurRadius: 14,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
-      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Text(
+            rideHeader,
+            style: GoogleFonts.poppins(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _VehicleHero(
+            plateText: plateText,
+            isActive: isActive,
+          ),
+          const SizedBox(height: 12),
+          _PackageSummaryCard(
+            expiresAt: expiresAt,
+            remainingSeconds: remainingSeconds,
+            needToPayAmount: needToPayAmount,
+            onViewPackage: onViewPackage,
+            packageLabel: packageLabel,
+            viewPackageLabel: viewPackageLabel,
+            expiresLabel: expiresLabel,
+            remainingLabel: remainingLabel,
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+class _VehicleHero extends StatefulWidget {
+  const _VehicleHero({
+    required this.plateText,
+    required this.isActive,
+  });
+
+  final String plateText;
+  final bool isActive;
+
+  @override
+  State<_VehicleHero> createState() => _VehicleHeroState();
+}
+
+class _VehicleHeroState extends State<_VehicleHero>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final AnimationController _controller;
+  late final Animation<double> _sweep;
+  bool _visible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+    _sweep = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutCubic,
+    );
+    _startSweepLoop();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _visible = state == AppLifecycleState.resumed;
+    if (!_visible) {
+      _controller.stop();
+    } else {
+      _startSweepLoop();
+    }
+  }
+
+  Future<void> _startSweepLoop() async {
+    if (!_visible || _controller.isAnimating) return;
+    while (mounted && _visible) {
+      await _controller.forward(from: 0);
+      if (!mounted || !_visible) break;
+      await Future<void>.delayed(const Duration(milliseconds: 1800));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 150,
+          width: 210,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.28),
+            borderRadius: BorderRadius.circular(90),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.25),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(90),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.asset(
+                  'assets/images/dashboard.png',
+                  height: 132,
+                  fit: BoxFit.contain,
+                ),
+                AnimatedBuilder(
+                  animation: _sweep,
+                  builder: (context, child) {
+                    final dx = (-0.6 + (_sweep.value * 1.2));
+                    return Transform.translate(
+                      offset: Offset(210 * dx, 0),
+                      child: child,
+                    );
+                  },
+                  child: Transform.rotate(
+                    angle: -0.25,
+                    child: Container(
+                      width: 90,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.white.withValues(alpha: 0.12),
+                            Colors.white.withValues(alpha: 0.0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              widget.plateText,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _StatusBadge(isActive: widget.isActive),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.isActive});
+
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isActive ? const Color(0xFF22C55E) : const Color(0xFFE34A43);
+    final l10n = AppLocalizations.of(context);
+    final text = isActive ? l10n.statusOn : l10n.statusOff;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Text(
-        plate,
-        textAlign: TextAlign.center,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        text,
         style: GoogleFonts.poppins(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-          color: Colors.black,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
         ),
       ),
     );
   }
 }
 
-class _GridCards extends StatelessWidget {
-  const _GridCards({
-    required this.isActive,
-    required this.dimmed,
-    required this.isBusy,
-    required this.isEnding,
-    required this.isFinding,
-    required this.elapsedSeconds,
-    required this.rentalStartedAt,
-    required this.hasRental,
-    required this.onEnd,
-    required this.onFind,
-    this.status,
-    this.rental,
+class _PackageSummaryCard extends StatelessWidget {
+  const _PackageSummaryCard({
+    required this.expiresAt,
+    required this.remainingSeconds,
+    required this.needToPayAmount,
+    required this.onViewPackage,
+    required this.packageLabel,
+    required this.viewPackageLabel,
+    required this.expiresLabel,
+    required this.remainingLabel,
   });
 
-  final bool isActive;
-  final bool dimmed;
-  final bool isBusy;
-  final bool isEnding;
-  final bool isFinding;
-  final int elapsedSeconds;
-  final DateTime? rentalStartedAt;
-  final bool hasRental;
-  final VoidCallback onEnd;
-  final VoidCallback onFind;
-  final RideStatus? status;
-  final RentalSession? rental;
+  final DateTime? expiresAt;
+  final int remainingSeconds;
+  final double needToPayAmount;
+  final VoidCallback onViewPackage;
+  final String packageLabel;
+  final String viewPackageLabel;
+  final String expiresLabel;
+  final String remainingLabel;
 
   @override
   Widget build(BuildContext context) {
-    final carbon = status?.carbonEmissions ?? 0;
-    final rentalTime = status?.rentalMinutes ?? 0;
-    final ping = status?.pingQuality ?? '---';
-    final l10n = AppLocalizations.of(context);
-    final label = GoogleFonts.poppins(
-      fontSize: 10.5,
-      fontWeight: FontWeight.w600,
-      color: Colors.white,
-    );
-    final value = GoogleFonts.poppins(
-      fontSize: 12.5,
-      fontWeight: FontWeight.w700,
-      color: Colors.white,
-    );
-    String formatDate(DateTime? dt) {
-      if (dt == null) return '--';
-      final local = dt;
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      final day = local.day.toString().padLeft(2, '0');
-      final month = months[local.month - 1];
-      return '$day $month ${local.year}';
-    }
-
-    String formatTime(DateTime? dt) {
-      if (dt == null) return '--';
-      final local = dt;
-      final hour = local.hour.toString().padLeft(2, '0');
-      final minute = local.minute.toString().padLeft(2, '0');
-      return '$hour:$minute';
-    }
-
-    String rentalValue() {
-      if (!hasRental) return '--';
-      if (rentalStartedAt != null) {
-        return formatDate(rentalStartedAt);
-      }
-      return '--';
-    }
-
-    List<String> splitValue(String value) {
-      final parts = value.split('|');
-      if (parts.length >= 2) {
-        return [parts[0], parts.sublist(1).join('|')];
-      }
-      return [value, ''];
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A000000),
+            blurRadius: 10,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Row(
             children: [
-              Expanded(
-                child: _InfoTile(
-                  label: l10n.carbonEmission,
-                  value: carbon == 0 ? '--' : carbon.toStringAsFixed(2),
-                  icon: Icons.eco_rounded,
-                  labelStyle: label,
-                  valueStyle: value,
-                  dimmed: dimmed,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F2FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  packageLabel,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF2C7BFE),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _EndRentalTile(
-                  isEnding: isEnding,
-                  disabled: isBusy,
-                  onPressed: onEnd,
+              const Spacer(),
+              TextButton(
+                onPressed: onViewPackage,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  viewPackageLabel,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF9AA0AA),
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
+          Divider(color: const Color(0xFFE6E9F2), height: 1),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: _RentalTimeTile(
-                  label: '${l10n.start} ${l10n.rentalTime}',
-                  value: hasRental
-                      ? (rentalStartedAt != null
-                            ? '${rentalValue()}|${formatTime(rentalStartedAt)}'
-                            : rentalValue())
-                      : (rentalTime == 0
-                            ? '--'
-                            : '$rentalTime ${l10n.durationMinute}'),
-                  icon: Icons.timer_rounded,
-                  labelStyle: label,
-                  valueStyle: value,
-                  active: hasRental,
-                  dimmed: dimmed,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      expiresLabel,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C7BFE),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatDateTime(expiresAt),
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C7BFE),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _InfoTile(
-                  label: l10n.findEmotor,
-                  value: ping,
-                  icon: Icons.campaign_rounded,
-                  labelStyle: label,
-                  valueStyle: value,
-                  rightIcon: true,
-                  outlined: true,
-                  dimmed: false, // Ping stays vivid
-                  onTap: isFinding ? null : onFind,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    remainingLabel,
+                    style: GoogleFonts.poppins(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2C7BFE),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatRupiah(needToPayAmount),
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF2C7BFE),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1630,184 +1914,251 @@ class _GridCards extends StatelessWidget {
     );
   }
 
-  String _formatDuration(int seconds) {
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    final secs = seconds % 60;
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  String _formatRupiah(num value) {
+    final intValue = value.round();
+    final digits = intValue.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final idx = digits.length - i;
+      buffer.write(digits[i]);
+      if (idx > 1 && idx % 3 == 1) {
+        buffer.write('.');
+      }
     }
-    return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    return 'Rp ${buffer.toString()}';
+  }
+
+  String _formatDateTime(DateTime? dt) {
+    if (dt == null) return '--';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = months[dt.month - 1];
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$day $month ${dt.year} $hour:$minute';
   }
 }
 
-class _InfoTile extends StatelessWidget {
-  const _InfoTile({
-    required this.label,
+class _StatGrid extends StatelessWidget {
+  const _StatGrid({
+    required this.carbonReduction,
+    required this.rangeKm,
+    required this.rideSeconds,
+    required this.isFinding,
+    required this.onFind,
+    required this.carbonLabel,
+    required this.findLabel,
+    required this.findingLabel,
+    required this.rangeLabel,
+    required this.rideTimeLabel,
+    required this.rideTimeValue,
+  });
+
+  final double carbonReduction;
+  final int rangeKm;
+  final int rideSeconds;
+  final bool isFinding;
+  final VoidCallback onFind;
+  final String carbonLabel;
+  final String findLabel;
+  final String findingLabel;
+  final String rangeLabel;
+  final String rideTimeLabel;
+  final String rideTimeValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                title: carbonLabel,
+                value: _formatCarbon(carbonReduction),
+                icon: Icons.eco_rounded,
+                filled: true,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                title: isFinding ? findingLabel : findLabel,
+                value: '',
+                icon: Icons.campaign_rounded,
+                filled: false,
+                onTap: isFinding ? null : onFind,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                title: rangeLabel,
+                value: '$rangeKm km',
+                icon: Icons.place_rounded,
+                filled: false,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                title: rideTimeLabel,
+                value: rideTimeValue,
+                icon: Icons.timer_rounded,
+                filled: false,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  String _formatCarbon(double value) {
+    if (value >= 1000) {
+      final kg = value / 1000;
+      return '${kg.toStringAsFixed(2)} kg';
+    }
+    return '${value.toStringAsFixed(2)} g';
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.isActive,
+    required this.isToggling,
+    required this.onToggle,
+    required this.onLabel,
+    required this.offLabel,
+  });
+
+  final bool isActive;
+  final bool isToggling;
+  final ValueChanged<bool> onToggle;
+  final String onLabel;
+  final String offLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionTile(
+            label: onLabel,
+            color: const Color(0xFF2C7BFE),
+            icon: Icons.power_settings_new_rounded,
+            onTap: (!isToggling && !isActive) ? () => onToggle(true) : null,
+            isActive: isActive,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _ActionTile(
+            label: offLabel,
+            color: const Color(0xFFE34A43),
+            icon: Icons.power_settings_new_rounded,
+            onTap: (!isToggling && isActive) ? () => onToggle(false) : null,
+            isActive: !isActive,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.title,
     required this.value,
     required this.icon,
-    required this.labelStyle,
-    required this.valueStyle,
-    this.rightIcon = false,
-    this.outlined = false,
-    this.dimmed = false,
+    required this.filled,
     this.onTap,
   });
 
-  final String label;
+  final String title;
   final String value;
   final IconData icon;
-  final TextStyle labelStyle;
-  final TextStyle valueStyle;
-  final bool rightIcon;
-  final bool outlined;
-  final bool dimmed;
+  final bool filled;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final baseColor = const Color(0xFF2C7BFE);
-    final bg = outlined ? Colors.white : baseColor;
-    final border = outlined ? Border.all(color: baseColor, width: 1.3) : null;
-    final fgColor = outlined ? baseColor : Colors.white;
-    return Opacity(
-      opacity: dimmed ? 0.55 : 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 68,
+    final bg = filled ? baseColor : Colors.white;
+    final border =
+        filled ? null : Border.all(color: const Color(0xFFE6E9F2), width: 1);
+    final textColor = filled ? Colors.white : const Color(0xFF111827);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 78,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(12),
-            border: border,
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x142C7BFE),
-                blurRadius: 10,
-                offset: Offset(0, 6),
-              ),
-            ],
+            border: onTap != null
+                ? Border.all(color: baseColor, width: 1.2)
+                : border,
+            boxShadow: filled
+                ? const [
+                    BoxShadow(
+                      color: Color(0x1A2C7BFE),
+                      blurRadius: 10,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisAlignment: rightIcon
-                ? MainAxisAlignment.spaceBetween
-                : MainAxisAlignment.start,
-            children: [
-              Icon(icon, color: fgColor, size: 20),
-              const SizedBox(width: 8),
-              if (!rightIcon)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(label, style: labelStyle.copyWith(color: fgColor)),
-                    if (value.isNotEmpty)
-                      Text(value, style: valueStyle.copyWith(color: fgColor)),
-                  ],
-                ),
-              if (rightIcon)
-                Text(label, style: labelStyle.copyWith(color: fgColor)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RentalTimeTile extends StatelessWidget {
-  const _RentalTimeTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.labelStyle,
-    required this.valueStyle,
-    required this.active,
-    required this.dimmed,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final TextStyle labelStyle;
-  final TextStyle valueStyle;
-  final bool active;
-  final bool dimmed;
-
-  @override
-  Widget build(BuildContext context) {
-    const baseColor = Color(0xFF2C7BFE);
-    final fg = active ? Colors.white : baseColor;
-    final bg = active
-        ? const LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [Color(0xFF1E6DFF), Color(0xFF3F8CFF)],
-          )
-        : const LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [Color(0xFFE5ECF7), Color(0xFFF4F7FB)],
-          );
-    final parts = value.split('|');
-    final line1 = parts.isNotEmpty ? parts.first : '';
-    final line2 = parts.length > 1 ? parts.sublist(1).join('|') : '';
-    return Opacity(
-      opacity: dimmed ? 0.55 : 1,
-      child: Container(
-        height: 74,
-        decoration: BoxDecoration(
-          gradient: bg,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x142C7BFE),
-              blurRadius: 10,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            Icon(icon, color: fg, size: 20),
-            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: labelStyle.copyWith(color: fg),
-                  ),
-                  if (line1.isNotEmpty)
-                    Text(
-                      line1,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: valueStyle.copyWith(color: fg, fontSize: 11.5),
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
                     ),
-                  if (line2.isNotEmpty)
+                  ),
+                  const SizedBox(height: 6),
+                  if (value.isNotEmpty)
                     Text(
-                      line2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: valueStyle.copyWith(color: fg, fontSize: 11),
+                      value,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
                     ),
                 ],
               ),
             ),
-            if (!active)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Icon(Icons.timer_outlined, color: baseColor, size: 18),
-              ),
+            Icon(
+              icon,
+              color: filled ? Colors.white : const Color(0xFF2C7BFE),
+              size: 28,
+            ),
           ],
         ),
       ),
@@ -1815,70 +2166,53 @@ class _RentalTimeTile extends StatelessWidget {
   }
 }
 
-class _EndRentalTile extends StatelessWidget {
-  const _EndRentalTile({
-    required this.isEnding,
-    required this.disabled,
-    required this.onPressed,
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.label,
+    required this.color,
+    required this.icon,
+    required this.onTap,
+    required this.isActive,
   });
 
-  final bool isEnding;
-  final bool disabled;
-  final VoidCallback onPressed;
+  final String label;
+  final Color color;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
-    const baseColor = Color(0xFFFFA45B);
-    final isDisabled = disabled || isEnding;
+    final isRed = color == const Color(0xFFE34A43);
+    final background = isRed ? null : null;
     return Opacity(
-      opacity: isDisabled ? 0.7 : 1,
+      opacity: onTap == null ? 0.6 : 1,
       child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        onTap: isDisabled ? null : onPressed,
         child: Container(
-          height: 68,
+          height: 56,
           decoration: BoxDecoration(
-            color: baseColor,
+            color: color,
+            gradient: background,
             borderRadius: BorderRadius.circular(12),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1AFFA45B),
-                blurRadius: 10,
-                offset: Offset(0, 6),
-              ),
-            ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.stop_circle_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isEnding
-                      ? AppLocalizations.of(context).ending
-                      : AppLocalizations.of(context).endRental,
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  label,
                   style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
-              ),
-              if (isEnding)
-                const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.white),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1886,116 +2220,302 @@ class _EndRentalTile extends StatelessWidget {
   }
 }
 
-class _PowerButtons extends StatelessWidget {
-  const _PowerButtons({
-    required this.isActive,
-    required this.onToggle,
-    this.disabled = false,
-  });
-
-  final bool isActive;
-  final bool disabled;
-  final ValueChanged<bool> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    const onColor = Color(0xFF2C7BFE);
-    const offColor = Color(0xFFFFA45B);
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: _PowerButton(
-              label: l10n.on,
-              icon: Icons.flash_on_rounded,
-              color: onColor,
-              active: isActive,
-              disabled: disabled,
-              onTap: () => onToggle(true),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _PowerButton(
-              label: l10n.off,
-              icon: Icons.power_settings_new_rounded,
-              color: offColor,
-              active: !isActive,
-              disabled: disabled,
-              onTap: () => onToggle(false),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PowerButton extends StatelessWidget {
-  const _PowerButton({
+class _OutlineButton extends StatelessWidget {
+  const _OutlineButton({
     required this.label,
     required this.icon,
-    required this.color,
-    required this.active,
-    required this.disabled,
     required this.onTap,
   });
 
   final String label;
   final IconData icon;
-  final Color color;
-  final bool active;
-  final bool disabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isDisabled = disabled;
-    final bg = active ? color : Colors.white;
-    final fg = active ? Colors.white : color;
-    return Opacity(
-      opacity: isDisabled ? 0.6 : 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: isDisabled ? null : onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          height: 56,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(14),
-            border: active
-                ? null
-                : Border.all(color: color.withValues(alpha: 0.3)),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: active ? 0.28 : 0.12),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2C7BFE), width: 1.2),
+          color: Colors.white,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF2C7BFE), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF2C7BFE),
               ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: fg, size: 22),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: fg,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+class _ChangeMotorDialog extends StatelessWidget {
+  const _ChangeMotorDialog({
+    required this.onClose,
+    required this.onContact,
+  });
+
+  final VoidCallback onClose;
+  final VoidCallback onContact;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    height: 56,
+                    width: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFE7F2FF),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1A2C7BFE),
+                          blurRadius: 12,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.support_agent_rounded,
+                      color: Color(0xFF2C7BFE),
+                      size: 30,
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              l10n.changeMotorTitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.changeMotorBody,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF7B8190),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: onClose,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF1F3F6),
+                        foregroundColor: const Color(0xFF111827),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        l10n.cancel,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: onContact,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2C7BFE),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        l10n.contactOperator,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScooterHero extends StatefulWidget {
+  const _ScooterHero({
+    required this.isActive,
+    required this.hasActivePackage,
+  });
+
+  final bool isActive;
+  final bool hasActivePackage;
+
+  @override
+  State<_ScooterHero> createState() => _ScooterHeroState();
+}
+
+class _ScooterHeroState extends State<_ScooterHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _pulse = Tween<double>(begin: 0.96, end: 1.02).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOutCubic,
+      ),
+    );
+    if (widget.hasActivePackage) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScooterHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.hasActivePackage && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.hasActivePackage && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final glowBase = widget.isActive ? 0.16 : 0.08;
+    final glowBoost = widget.hasActivePackage ? 0.10 : 0.0;
+    return SizedBox(
+      height: 180,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, child) {
+          final scale = widget.hasActivePackage ? _pulse.value : 1.0;
+          final glow = glowBase + (widget.hasActivePackage ? 0.06 : 0.0);
+          return Transform.scale(
+            scale: scale,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  top: 38,
+                  child: Container(
+                    width: 174,
+                    height: 174,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFE7F1FF),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2C7BFE).withValues(
+                            alpha: (glow + glowBoost).clamp(0.08, 0.28),
+                          ),
+                          blurRadius: 28,
+                          spreadRadius: 6,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Image.asset(
+                    'assets/images/dashboard.png',
+                    height: 135,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+
+
+

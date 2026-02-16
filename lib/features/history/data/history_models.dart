@@ -272,3 +272,59 @@ class HistoryEntry {
     return false;
   }
 }
+
+class MembershipHistoryEntry {
+  MembershipHistoryEntry({
+    required this.id,
+    required this.membershipId,
+    required this.status,
+    required this.createdAt,
+    required this.expiredAt,
+    required this.name,
+    required this.price,
+  });
+
+  factory MembershipHistoryEntry.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic>? asMap(dynamic value) =>
+        value is Map<String, dynamic> ? value : null;
+    String text(dynamic value) =>
+        value == null ? '' : value.toString().trim();
+    num toNum(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value;
+      return num.tryParse(value.toString()) ?? 0;
+    }
+
+    final membership = asMap(json['membership']) ?? const {};
+    final id = text(json['id']);
+    final membershipId = text(json['membership_id']).isNotEmpty
+        ? text(json['membership_id'])
+        : text(membership['id']);
+    final status = text(json['status']);
+    final createdAt = DateTime.tryParse(text(json['createdAt'])) ??
+        DateTime.tryParse(text(json['created_at']));
+    final expiredAt = DateTime.tryParse(text(json['expired_at']));
+    final name = text(membership['name']);
+    final price = toNum(membership['price']);
+
+    return MembershipHistoryEntry(
+      id: id,
+      membershipId: membershipId,
+      status: status,
+      createdAt: createdAt,
+      expiredAt: expiredAt,
+      name: name.isEmpty ? '-' : name,
+      price: price.toDouble(),
+    );
+  }
+
+  final String id;
+  final String membershipId;
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? expiredAt;
+  final String name;
+  final double price;
+
+  bool get isActive => status.toLowerCase().contains('active');
+}

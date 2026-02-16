@@ -29,6 +29,104 @@ class AppLocalizations {
 
   static const Map<String, Map<String, String>> _strings = {
     'en': {
+      'nav_history': 'History',
+      'nav_dashboard': 'Dashboard',
+      'nav_profile': 'Profile',
+      'documents': 'Documents',
+      'verify_documents': 'Verify Documents',
+      'verified': 'Verified',
+      'not_verified': 'Not Verified',
+      'under_review': 'Under Review',
+      'verify_under_review_title': 'Verification Under Review',
+      'verify_under_review_body':
+          'Your documents are being reviewed. Please wait for approval before purchasing a package.',
+      'verify_required_title': 'Verification Required',
+      'verify_required_body':
+          'To rent a motor, please upload your KTP and SIM first.',
+      'upload_documents': 'Upload Documents',
+      'payment_pending': 'Payment Pending',
+      'payment_pending_body':
+          'Please complete your payment using the selected method.',
+      'payment_processing': 'Payment is being processed. We will update your status shortly.',
+      'time_left': 'Time left',
+      'amount_to_pay': 'Amount to pay',
+      'need_to_pay': 'Need to pay',
+      'additional_pay': 'Additional Pay',
+      'pay_before': 'Pay before',
+      'session_expired_title': 'Session Expired',
+      'session_expired_body': 'Please log in again to continue.',
+      'login_again': 'Login Again',
+      'contact_admin_title': 'Contact Admin',
+      'contact_admin_body':
+          'Please contact our admin via WhatsApp for password assistance.',
+      'contact_admin_button': 'Open WhatsApp',
+      'contact_operator_body':
+          'Please contact our operator via WhatsApp for motor assistance.',
+      'upload_required': 'Please upload both front and back images.',
+      'upload_success': 'Documents uploaded successfully.',
+      'upload_file_type_error': 'File must be JPG or PNG.',
+      'document_verified_title': 'Documents Verified',
+      'document_verified_body':
+          'Your documents have been verified. No further action is needed.',
+      'document_under_review_title': 'Documents Under Review',
+      'document_under_review_body':
+          'Your documents are being reviewed. Please wait for approval.',
+      'document_ktp': 'Identity Card (KTP)',
+      'document_sim': 'Driver License (SIM)',
+      'upload': 'Upload',
+      'upload_front': 'Upload front side',
+      'upload_back': 'Upload back side',
+      'upload_hint': '*Please upload your {doc} photo.',
+      'doc_front_label': 'Front Image {doc}',
+      'doc_back_label': 'Back Image {doc}',
+      'camera': 'Camera',
+      'gallery': 'Gallery',
+      'ride_header': 'Ride',
+      'view_package': 'View Package >',
+      'package_default': 'Package 1 E-Motor',
+      'package_expires': 'Valid until',
+      'package_remaining': 'Time left:',
+      'membership_title': 'E-Motor Packages',
+      'membership_subtitle': 'Pick a package to start riding.',
+      'buy': 'Buy',
+      'confirm_package_title': 'Confirm package purchase?',
+      'confirm_package_body':
+          'If you are sure, tap Buy to continue the purchase.',
+      'insufficient_title': 'Insufficient Balance',
+      'insufficient_body':
+          'Your balance does not meet the minimum required for this package.',
+      'valid_for': 'Valid for',
+      'hours': 'hours',
+      'day_label': 'day',
+      'min_balance_prefix': 'Minimum balance',
+      'finding': 'Finding...',
+      'change_motor': 'Change Motor',
+      'contact_operator': 'Contact Operator',
+      'change_motor_title': 'Contact Operator',
+      'change_motor_body':
+          'If the motor has an issue or you want to switch, contact the operator for quick assistance.',
+      'payment_title': 'Payment',
+      'payment_amount_due': 'Amount to pay',
+      'payment_method': 'Select payment method',
+      'pay': 'Pay',
+      'continue': 'Continue',
+      'confirm_pay_title': 'Proceed with payment?',
+      'confirm_pay_body': 'You will pay {amount}.',
+      'balance': 'Balance',
+      'payment_success': 'Payment Success',
+      'payment_failed': 'Payment Failed',
+      'insufficient_balance': 'Your balance is not sufficient to make payment.',
+      'duration_label': 'Duration',
+      'distance_label': 'Distance',
+      'emission_label': 'Emission',
+      'cost_label': 'Cost',
+      'top_up': 'Top Up',
+      'package_label': 'Package',
+      'range_label': 'Ride Range',
+      'speed_label': 'Speed',
+      'recharge_title': 'Top Up',
+      'recharge_prompt': 'Enter top up amount',
+      'bonus': 'Bonus',
       'welcome_back': 'Welcome back!',
       'login_subtitle': 'Sign in to continue your ride with Gridwiz E-Motor.',
       'username': 'Username',
@@ -74,9 +172,9 @@ class AppLocalizations {
       'find_emotor_body':
           'Your e-motor is pinging now. Follow the sound or indicator to locate it.',
       'find_emotor_cta': 'Got it',
-      'start_ride_title': 'Start Ride?',
-      'start_ride_body': 'Start a ride to use the dashboard.',
-      'start_ride_button': 'Start Ride',
+      'start_ride_title': 'Choose Package',
+      'start_ride_body': 'Choose a package to begin your ride.',
+      'start_ride_button': 'Get Packages',
       'my_history': 'My History',
       'stats_mileage': 'Mileage',
       'stats_active_days': 'Active Days',
@@ -84,6 +182,15 @@ class AppLocalizations {
       'stats_reduced_emission': 'Reduced Emission',
       'history_load_failed': 'Failed to load history.',
       'history_empty': 'No trip history yet.',
+      'membership_history_title': 'Membership History',
+      'membership_history_detail': 'Membership Detail',
+      'membership_status_active': 'Active',
+      'membership_status_expired': 'Expired',
+      'membership_status_pending': 'Pending',
+      'membership_valid_until': 'Valid until',
+      'membership_purchased': 'Purchased',
+      'view_rides': 'View rides',
+      'pay_membership': 'Pay',
       'no_ride_id': 'No ride history yet. Start rental first.',
       'detail_trip': 'Trip Details',
       'distance': 'Distance',
@@ -168,6 +275,106 @@ class AppLocalizations {
       'loading_ending_rental': 'Ending rental...',
     },
     'id': {
+      'nav_history': 'History',
+      'nav_dashboard': 'Dashboard',
+      'nav_profile': 'Profile',
+      'documents': 'Dokumen',
+      'verify_documents': 'Verifikasi Dokumen',
+      'verified': 'Terverifikasi',
+      'not_verified': 'Belum Terverifikasi',
+      'under_review': 'Sedang Ditinjau',
+      'verify_under_review_title': 'Verifikasi Sedang Ditinjau',
+      'verify_under_review_body':
+          'Dokumen Anda sedang ditinjau. Mohon tunggu persetujuan sebelum membeli paket.',
+      'verify_required_title': 'Verifikasi Diperlukan',
+      'verify_required_body':
+          'Untuk menyewa motor, mohon unggah KTP dan SIM terlebih dahulu.',
+      'upload_documents': 'Unggah Dokumen',
+      'payment_pending': 'Pembayaran Tertunda',
+      'payment_pending_body':
+          'Silakan selesaikan pembayaran melalui metode yang dipilih.',
+      'payment_processing':
+          'Pembayaran sedang diproses. Status akan diperbarui segera.',
+      'time_left': 'Sisa waktu',
+      'amount_to_pay': 'Total yang harus dibayar',
+      'need_to_pay': 'Perlu dibayar',
+      'additional_pay': 'Biaya tambahan',
+      'pay_before': 'Bayar sebelum',
+      'session_expired_title': 'Sesi Berakhir',
+      'session_expired_body': 'Silakan login ulang untuk melanjutkan.',
+      'login_again': 'Login Ulang',
+      'contact_admin_title': 'Hubungi Admin',
+      'contact_admin_body':
+          'Silakan hubungi admin via WhatsApp untuk bantuan password.',
+      'contact_admin_button': 'Buka WhatsApp',
+      'contact_operator_body':
+          'Silakan hubungi operator via WhatsApp untuk bantuan motor.',
+      'upload_required': 'Mohon unggah gambar depan dan belakang.',
+      'upload_success': 'Dokumen berhasil diunggah.',
+      'upload_file_type_error': 'File harus JPG atau PNG.',
+      'document_verified_title': 'Dokumen Terverifikasi',
+      'document_verified_body':
+          'Dokumen Anda sudah terverifikasi. Tidak perlu tindakan tambahan.',
+      'document_under_review_title': 'Dokumen Sedang Ditinjau',
+      'document_under_review_body':
+          'Dokumen Anda sedang ditinjau. Mohon tunggu persetujuan.',
+      'document_ktp': 'Kartu Tanda Penduduk (KTP)',
+      'document_sim': 'Surat Izin Mengemudi (SIM)',
+      'upload': 'Unggah',
+      'upload_front': 'Unggah sisi depan',
+      'upload_back': 'Unggah sisi belakang',
+      'upload_hint': '*Silahkan unggah foto {doc} anda.',
+      'doc_front_label': 'Gambar Depan {doc}',
+      'doc_back_label': 'Gambar Belakang {doc}',
+      'camera': 'Kamera',
+      'gallery': 'Galeri',
+      'ride_header': 'Berkendara',
+      'view_package': 'Lihat Paket >',
+      'package_default': 'Paket 1 E-Motor',
+      'package_expires': 'Berlaku sampai',
+      'package_remaining': 'Sisa waktu:',
+      'membership_title': 'Paket Reflow E-Motor',
+      'membership_subtitle': 'Pilih paket untuk mulai berkendara.',
+      'buy': 'Beli',
+      'confirm_package_title': 'Yakin mau beli paket ini?',
+      'confirm_package_body':
+          'Jika anda yakin membeli paket ini, tekan Beli untuk melanjutkan pembelian.',
+      'insufficient_title': 'Saldo Anda Tidak Cukup',
+      'insufficient_body':
+          'Saldo anda tidak memenuhi jumlah minimum untuk membeli paket ini.',
+      'valid_for': 'Masa berlaku',
+      'hours': 'Jam',
+      'day_label': 'hari',
+      'min_balance_prefix': 'Minimal Saldo',
+      'finding': 'Mencari...',
+      'change_motor': 'Ganti Motor',
+      'contact_operator': 'Hubungi Operator',
+      'change_motor_title': 'Hubungi Operator',
+      'change_motor_body':
+          'Jika motor bermasalah atau ingin mengganti, hubungi operator untuk bantuan cepat.',
+      'payment_title': 'Pembayaran',
+      'payment_amount_due': 'Jumlah yang harus dibayar',
+      'payment_method': 'Pilih metode pembayaran',
+      'pay': 'Bayar',
+      'continue': 'Lanjutkan',
+      'confirm_pay_title': 'Yakin lanjut bayar?',
+      'confirm_pay_body': 'Kamu akan membayar sebesar {amount}.',
+      'balance': 'Saldo',
+      'payment_success': 'Pembayaran Berhasil',
+      'payment_failed': 'Pembayaran Gagal',
+      'insufficient_balance':
+          'Saldo Anda tidak mencukupi untuk melakukan pembayaran.',
+      'duration_label': 'Durasi',
+      'distance_label': 'Jarak',
+      'emission_label': 'Emisi',
+      'cost_label': 'Biaya',
+      'top_up': 'Isi Ulang',
+      'package_label': 'Paket',
+      'range_label': 'Jarak Berkendara',
+      'speed_label': 'Speed',
+      'recharge_title': 'Isi Ulang',
+      'recharge_prompt': 'Masukkan jumlah isi ulang',
+      'bonus': 'Bonus',
       'welcome_back': 'Selamat datang!',
       'login_subtitle':
           'Masuk untuk melanjutkan perjalanan Anda dengan Gridwiz E-Motor.',
@@ -215,9 +422,9 @@ class AppLocalizations {
       'find_emotor_body':
           'E-motor sedang berbunyi. Ikuti bunyi atau indikator untuk menemukannya.',
       'find_emotor_cta': 'Mengerti',
-      'start_ride_title': 'Mulai Ride?',
-      'start_ride_body': 'Untuk menggunakan dashboard, mulai ride dulu.',
-      'start_ride_button': 'Mulai Ride',
+      'start_ride_title': 'Pilih Paket & Mulai Berkendara',
+      'start_ride_body': 'Pilih paket untuk mulai berkendara.',
+      'start_ride_button': 'Get Packages',
       'my_history': 'Riwayat',
       'stats_mileage': 'Jarak Tempuh',
       'stats_active_days': 'Hari Aktif',
@@ -225,6 +432,15 @@ class AppLocalizations {
       'stats_reduced_emission': 'Pengurangan Emisi',
       'history_load_failed': 'Gagal memuat riwayat.',
       'history_empty': 'Belum ada riwayat perjalanan.',
+      'membership_history_title': 'Riwayat Membership',
+      'membership_history_detail': 'Detail Membership',
+      'membership_status_active': 'Aktif',
+      'membership_status_expired': 'Berakhir',
+      'membership_status_pending': 'Menunggu',
+      'membership_valid_until': 'Berlaku sampai',
+      'membership_purchased': 'Dibeli',
+      'view_rides': 'Lihat perjalanan',
+      'pay_membership': 'Bayar',
       'no_ride_id': 'Belum ada ride history. Mulai rental dulu.',
       'detail_trip': 'Detail Perjalanan',
       'distance': 'Jarak Tempuh',
@@ -363,6 +579,15 @@ class AppLocalizations {
   String get statsReducedEmission => _t('stats_reduced_emission');
   String get historyLoadFailed => _t('history_load_failed');
   String get historyEmpty => _t('history_empty');
+  String get membershipHistoryTitle => _t('membership_history_title');
+  String get membershipHistoryDetail => _t('membership_history_detail');
+  String get membershipStatusActive => _t('membership_status_active');
+  String get membershipStatusExpired => _t('membership_status_expired');
+  String get membershipStatusPending => _t('membership_status_pending');
+  String get membershipValidUntil => _t('membership_valid_until');
+  String get membershipPurchased => _t('membership_purchased');
+  String get viewRides => _t('view_rides');
+  String get payMembership => _t('pay_membership');
   String get noRideId => _t('no_ride_id');
   String get detailTrip => _t('detail_trip');
   String get distance => _t('distance');
@@ -425,6 +650,94 @@ class AppLocalizations {
   String get errorNoInternet => _t('error_no_internet');
   String get errorSendCommandFailed => _t('error_send_command_failed');
   String get errorVehicleNotResponding => _t('error_vehicle_not_responding');
+  String get navHistory => _t('nav_history');
+  String get navDashboard => _t('nav_dashboard');
+  String get navProfile => _t('nav_profile');
+  String get documents => _t('documents');
+  String get verifyDocuments => _t('verify_documents');
+  String get verified => _t('verified');
+  String get notVerified => _t('not_verified');
+  String get underReview => _t('under_review');
+  String get verifyUnderReviewTitle => _t('verify_under_review_title');
+  String get verifyUnderReviewBody => _t('verify_under_review_body');
+  String get verifyRequiredTitle => _t('verify_required_title');
+  String get verifyRequiredBody => _t('verify_required_body');
+  String get uploadDocuments => _t('upload_documents');
+  String get paymentPending => _t('payment_pending');
+  String get paymentPendingBody => _t('payment_pending_body');
+  String get paymentProcessing => _t('payment_processing');
+  String get timeLeft => _t('time_left');
+  String get amountToPay => _t('amount_to_pay');
+  String get needToPay => _t('need_to_pay');
+  String get additionalPay => _t('additional_pay');
+  String get payBefore => _t('pay_before');
+  String get sessionExpiredTitle => _t('session_expired_title');
+  String get sessionExpiredBody => _t('session_expired_body');
+  String get loginAgain => _t('login_again');
+  String get contactAdminTitle => _t('contact_admin_title');
+  String get contactAdminBody => _t('contact_admin_body');
+  String get contactAdminButton => _t('contact_admin_button');
+  String get contactOperatorBody => _t('contact_operator_body');
+  String get uploadRequired => _t('upload_required');
+  String get uploadSuccess => _t('upload_success');
+  String get uploadFileTypeError => _t('upload_file_type_error');
+  String get documentVerifiedTitle => _t('document_verified_title');
+  String get documentVerifiedBody => _t('document_verified_body');
+  String get documentUnderReviewTitle => _t('document_under_review_title');
+  String get documentUnderReviewBody => _t('document_under_review_body');
+  String get documentKtp => _t('document_ktp');
+  String get documentSim => _t('document_sim');
+  String get upload => _t('upload');
+  String get uploadFront => _t('upload_front');
+  String get uploadBack => _t('upload_back');
+  String get uploadHint => _t('upload_hint');
+  String get docFrontLabel => _t('doc_front_label');
+  String get docBackLabel => _t('doc_back_label');
+  String get camera => _t('camera');
+  String get gallery => _t('gallery');
+  String get rideHeader => _t('ride_header');
+  String get viewPackage => _t('view_package');
+  String get packageDefault => _t('package_default');
+  String get packageExpires => _t('package_expires');
+  String get packageRemaining => _t('package_remaining');
+  String get membershipTitle => _t('membership_title');
+  String get membershipSubtitle => _t('membership_subtitle');
+  String get buy => _t('buy');
+  String get confirmPackageTitle => _t('confirm_package_title');
+  String get confirmPackageBody => _t('confirm_package_body');
+  String get insufficientTitle => _t('insufficient_title');
+  String get insufficientBody => _t('insufficient_body');
+  String get validFor => _t('valid_for');
+  String get hours => _t('hours');
+  String get dayLabel => _t('day_label');
+  String get minBalancePrefix => _t('min_balance_prefix');
+  String get finding => _t('finding');
+  String get changeMotor => _t('change_motor');
+  String get contactOperator => _t('contact_operator');
+  String get changeMotorTitle => _t('change_motor_title');
+  String get changeMotorBody => _t('change_motor_body');
+  String get paymentTitle => _t('payment_title');
+  String get paymentAmountDue => _t('payment_amount_due');
+  String get paymentMethod => _t('payment_method');
+  String get pay => _t('pay');
+  String get continueLabel => _t('continue');
+  String get confirmPayTitle => _t('confirm_pay_title');
+  String get confirmPayBody => _t('confirm_pay_body');
+  String get balance => _t('balance');
+  String get paymentSuccess => _t('payment_success');
+  String get paymentFailed => _t('payment_failed');
+  String get insufficientBalance => _t('insufficient_balance');
+  String get durationLabel => _t('duration_label');
+  String get distanceLabel => _t('distance_label');
+  String get emissionLabel => _t('emission_label');
+  String get costLabel => _t('cost_label');
+  String get topUp => _t('top_up');
+  String get packageLabel => _t('package_label');
+  String get rangeLabel => _t('range_label');
+  String get speedLabel => _t('speed_label');
+  String get rechargeTitle => _t('recharge_title');
+  String get rechargePrompt => _t('recharge_prompt');
+  String get bonus => _t('bonus');
   String get errorNetworkGeneric => _t('error_network_generic');
   String get errorSessionExpired => _t('error_session_expired');
   String get errorHistoryNotFound => _t('error_history_not_found');

@@ -22,6 +22,7 @@ class RideStatus {
     required this.calories,
     required this.hasMotorState,
     required this.isEnded,
+    required this.amountPaid,
     this.startedAt,
     this.endedAt,
     this.plate,
@@ -90,6 +91,18 @@ class RideStatus {
           merged['co2'] ??
           merged['carbon'],
     );
+    final amountPaid = toDouble(
+      merged['amount_paid'] ??
+          merged['amountPaid'] ??
+          merged['payment_amount'] ??
+          merged['paymentAmount'] ??
+          merged['total_amount'] ??
+          merged['totalAmount'] ??
+          merged['total_price'] ??
+          merged['totalPrice'] ??
+          merged['payable_amount'] ??
+          merged['payableAmount'],
+    );
     final calories = toDouble(merged['calories']);
     final distanceMeters = toDouble(merged['total_distance_meters'] ??
         merged['distance_m'] ??
@@ -122,6 +135,7 @@ class RideStatus {
       calories: calories,
       hasMotorState: hasMotorState,
       isEnded: isEnded,
+      amountPaid: amountPaid,
       startedAt: startAt,
       endedAt: endAt,
       plate: plate?.toString(),
@@ -139,6 +153,7 @@ class RideStatus {
   final double calories;
   final bool hasMotorState;
   final bool isEnded;
+  final double amountPaid;
   final DateTime? startedAt;
   final DateTime? endedAt;
   final String? plate;

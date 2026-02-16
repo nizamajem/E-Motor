@@ -73,11 +73,29 @@ class SessionManager {
   static const _keyUserJson = 'session_user_json';
   static const _keyEmotorJson = 'session_emotor_json';
   static const _keyWalletJson = 'session_wallet_json';
+  static const _keyUserVerified = 'session_user_verified';
+  static const _keyWalletBalance = 'session_wallet_balance';
+  static const _keyOnboardingSeen = 'session_onboarding_seen';
+  static const _keyCustomerId = 'session_customer_id';
+  static const _keyCustomerEligible = 'session_customer_eligible';
+  static const _keyCustomerVerificationStatus =
+      'session_customer_verification_status';
+  static const _keyMembershipExpiresAt = 'session_membership_expires_at';
+  static const _keyMembershipName = 'session_membership_name';
+  static const _keyDashboardEmotorNumber = 'session_dashboard_emotor_number';
+  static const _keyDashboardRemainingSeconds =
+      'session_dashboard_remaining_seconds';
+  static const _keyDashboardEmission = 'session_dashboard_emission';
+  static const _keyDashboardRideRange = 'session_dashboard_ride_range';
+  static const _keyPendingSnapTokens = 'session_pending_snap_tokens';
+  static const _keyPendingRedirectUrls = 'session_pending_redirect_urls';
   static const _keyRentalJson = 'session_rental_json';
   static const _keyRentalStartedAt = 'session_rental_started_at';
+  static const _keyHasActivePackage = 'session_has_active_package';
   static const _secureKeyAccessToken = 'secure_access_token';
   static const _secureKeyRefreshToken = 'secure_refresh_token';
   static const _secureKeyUserId = 'secure_user_id';
+  static const _secureKeyCustomerId = 'secure_customer_id';
 
   UserSession? _user;
   RentalSession? _rental;
@@ -87,6 +105,21 @@ class SessionManager {
   Map<String, dynamic>? _userProfile;
   Map<String, dynamic>? _emotorProfile;
   Map<String, dynamic>? _walletProfile;
+  bool _isVerified = false;
+  int? _walletBalance;
+  String? _customerId;
+  bool _customerEligible = false;
+  String _customerVerificationStatus = 'not_verified';
+  DateTime? _membershipExpiresAt;
+  String? _membershipName;
+  String? _dashboardEmotorNumber;
+  int? _dashboardRemainingSeconds;
+  double? _dashboardEmission;
+  int? _dashboardRideRange;
+  Map<String, String> _pendingSnapTokens = {};
+  Map<String, String> _pendingRedirectUrls = {};
+  bool _hasActivePackage = false;
+  bool _onboardingSeen = false;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _refreshToken;
 
@@ -100,12 +133,45 @@ class SessionManager {
   Map<String, dynamic>? get userProfile => _userProfile;
   Map<String, dynamic>? get emotorProfile => _emotorProfile;
   Map<String, dynamic>? get walletProfile => _walletProfile;
+  bool get isVerified => _isVerified;
+  int? get walletBalance => _walletBalance;
+  String? get customerId => _customerId;
+  bool get customerEligible => _customerEligible;
+  String get customerVerificationStatus => _customerVerificationStatus;
+  DateTime? get membershipExpiresAt => _membershipExpiresAt;
+  String? get membershipName => _membershipName;
+  String? get dashboardEmotorNumber => _dashboardEmotorNumber;
+  int? get dashboardRemainingSeconds => _dashboardRemainingSeconds;
+  double? get dashboardEmission => _dashboardEmission;
+  int? get dashboardRideRange => _dashboardRideRange;
+  String? getPendingSnapToken(String membershipHistoryId) =>
+      _pendingSnapTokens[membershipHistoryId];
+  String? getPendingRedirectUrl(String membershipHistoryId) =>
+      _pendingRedirectUrls[membershipHistoryId];
+  bool get hasActivePackage => _hasActivePackage;
+  bool get onboardingSeen => _onboardingSeen;
+
+  Future<String> resolveUserId() async {
+    final direct = _user?.userId?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final profileId = _userProfile?['id_user']?.toString().trim() ??
+        _userProfile?['user_id']?.toString().trim() ??
+        _userProfile?['id']?.toString().trim();
+    if (profileId != null && profileId.isNotEmpty) return profileId;
+    final secureUserId = await _secureStorage.read(key: _secureKeyUserId);
+    if (secureUserId != null && secureUserId.isNotEmpty) {
+      return secureUserId;
+    }
+    return '';
+  }
 
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
     final accessToken = await _secureStorage.read(key: _secureKeyAccessToken);
     _refreshToken = await _secureStorage.read(key: _secureKeyRefreshToken);
     final secureUserId = await _secureStorage.read(key: _secureKeyUserId);
+    final secureCustomerId =
+        await _secureStorage.read(key: _secureKeyCustomerId);
     await prefs.remove(_keyToken);
     if (accessToken != null && accessToken.isNotEmpty) {
       _user = UserSession(
@@ -129,6 +195,61 @@ class SessionManager {
     _userProfile = _decodeMap(prefs.getString(_keyUserJson));
     _emotorProfile = _decodeMap(prefs.getString(_keyEmotorJson));
     _walletProfile = _decodeMap(prefs.getString(_keyWalletJson));
+    _isVerified = prefs.getBool(_keyUserVerified) ??
+        _parseVerified(_userProfile) ??
+        _parseVerified(_walletProfile) ??
+        false;
+    _walletBalance = prefs.getInt(_keyWalletBalance) ??
+        _parseWalletBalance(_walletProfile) ??
+        _parseWalletBalance(_userProfile);
+    _customerId = prefs.getString(_keyCustomerId) ??
+        secureCustomerId ??
+        _parseCustomerId(_userProfile) ??
+        _parseCustomerId(_walletProfile);
+    _customerVerificationStatus =
+        prefs.getString(_keyCustomerVerificationStatus) ??
+            _parseCustomerVerificationStatus(_userProfile) ??
+            _parseCustomerVerificationStatus(_walletProfile) ??
+            'not_verified';
+    _customerEligible = _customerVerificationStatus == 'verified';
+    if (!_customerEligible) {
+      _customerEligible = prefs.getBool(_keyCustomerEligible) ??
+          _parseCustomerEligibility(_userProfile) ??
+          false;
+    }
+    _onboardingSeen = prefs.getBool(_keyOnboardingSeen) ?? false;
+    final expiresRaw = prefs.getString(_keyMembershipExpiresAt);
+    _membershipExpiresAt =
+        expiresRaw == null ? null : DateTime.tryParse(expiresRaw);
+    _membershipName = prefs.getString(_keyMembershipName);
+    _dashboardEmotorNumber = prefs.getString(_keyDashboardEmotorNumber);
+    _dashboardRemainingSeconds = prefs.getInt(_keyDashboardRemainingSeconds);
+    _dashboardEmission = prefs.getDouble(_keyDashboardEmission);
+    _dashboardRideRange = prefs.getInt(_keyDashboardRideRange);
+    final pendingRaw = prefs.getString(_keyPendingSnapTokens);
+    if (pendingRaw != null && pendingRaw.isNotEmpty) {
+      final decoded = _decodeMap(pendingRaw);
+      if (decoded != null) {
+        _pendingSnapTokens = decoded.map(
+          (key, value) => MapEntry(key, value.toString()),
+        );
+      }
+    }
+    final pendingRedirectRaw = prefs.getString(_keyPendingRedirectUrls);
+    if (pendingRedirectRaw != null && pendingRedirectRaw.isNotEmpty) {
+      final decoded = _decodeMap(pendingRedirectRaw);
+      if (decoded != null) {
+        _pendingRedirectUrls = decoded.map(
+          (key, value) => MapEntry(key, value.toString()),
+        );
+      }
+    }
+    // Do not persist membership state locally; infer from latest profile only.
+    _hasActivePackage =
+        _parseHasActivePackage(_userProfile) ??
+        _parseHasActivePackage(_walletProfile) ??
+        false;
+    await prefs.remove(_keyHasActivePackage);
     final rentalJson = _decodeMap(prefs.getString(_keyRentalJson));
     if (rentalJson != null) {
       _rental = RentalSession.fromJson(rentalJson);
@@ -196,6 +317,16 @@ class SessionManager {
     }
   }
 
+  Future<void> setOnboardingSeen(bool value) async {
+    _onboardingSeen = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      await prefs.setBool(_keyOnboardingSeen, true);
+    } else {
+      await prefs.remove(_keyOnboardingSeen);
+    }
+  }
+
   Future<void> saveToken(String token) async {
     if (token.isEmpty) return;
     final current = _user;
@@ -220,6 +351,145 @@ class SessionManager {
     final current = _rental;
     if (current != null) {
       unawaited(_saveRentalStorage(current));
+    }
+  }
+
+  void setHasActivePackage(bool value) {
+    _hasActivePackage = value;
+  }
+
+  Future<void> setMembershipExpiresAt(DateTime? expiresAt) async {
+    _membershipExpiresAt = expiresAt;
+    final prefs = await SharedPreferences.getInstance();
+    if (expiresAt == null) {
+      await prefs.remove(_keyMembershipExpiresAt);
+    } else {
+      await prefs.setString(_keyMembershipExpiresAt, expiresAt.toIso8601String());
+    }
+  }
+
+  Future<void> setMembershipName(String? name) async {
+    final trimmed = name?.trim() ?? '';
+    _membershipName = trimmed.isEmpty ? null : trimmed;
+    final prefs = await SharedPreferences.getInstance();
+    if (_membershipName == null) {
+      await prefs.remove(_keyMembershipName);
+    } else {
+      await prefs.setString(_keyMembershipName, _membershipName!);
+    }
+  }
+
+  Future<void> setDashboardData({
+    String? emotorNumber,
+    int? remainingSeconds,
+    double? emissionReduction,
+    int? rideRange,
+    DateTime? validUntil,
+    String? packageName,
+  }) async {
+    _dashboardEmotorNumber =
+        (emotorNumber?.trim().isEmpty ?? true) ? null : emotorNumber!.trim();
+    _dashboardRemainingSeconds = remainingSeconds;
+    _dashboardEmission = emissionReduction;
+    _dashboardRideRange = rideRange;
+    if (validUntil != null) {
+      _membershipExpiresAt = validUntil;
+    }
+    if (packageName != null && packageName.trim().isNotEmpty) {
+      _membershipName = packageName.trim();
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (_dashboardEmotorNumber == null) {
+      await prefs.remove(_keyDashboardEmotorNumber);
+    } else {
+      await prefs.setString(
+        _keyDashboardEmotorNumber,
+        _dashboardEmotorNumber!,
+      );
+    }
+    if (_dashboardRemainingSeconds == null) {
+      await prefs.remove(_keyDashboardRemainingSeconds);
+    } else {
+      await prefs.setInt(
+        _keyDashboardRemainingSeconds,
+        _dashboardRemainingSeconds!,
+      );
+    }
+    if (_dashboardEmission == null) {
+      await prefs.remove(_keyDashboardEmission);
+    } else {
+      await prefs.setDouble(_keyDashboardEmission, _dashboardEmission!);
+    }
+    if (_dashboardRideRange == null) {
+      await prefs.remove(_keyDashboardRideRange);
+    } else {
+      await prefs.setInt(_keyDashboardRideRange, _dashboardRideRange!);
+    }
+    if (validUntil != null) {
+      await prefs.setString(
+        _keyMembershipExpiresAt,
+        validUntil.toIso8601String(),
+      );
+    }
+    if (packageName != null && packageName.trim().isNotEmpty) {
+      await prefs.setString(
+        _keyMembershipName,
+        packageName.trim(),
+      );
+    }
+  }
+
+  Future<void> savePendingSnapToken({
+    required String membershipHistoryId,
+    required String snapToken,
+  }) async {
+    if (membershipHistoryId.isEmpty || snapToken.isEmpty) return;
+    _pendingSnapTokens[membershipHistoryId] = snapToken;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _keyPendingSnapTokens,
+      jsonEncode(_pendingSnapTokens),
+    );
+  }
+
+  Future<void> savePendingRedirectUrl({
+    required String membershipHistoryId,
+    required String redirectUrl,
+  }) async {
+    if (membershipHistoryId.isEmpty || redirectUrl.isEmpty) return;
+    _pendingRedirectUrls[membershipHistoryId] = redirectUrl;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _keyPendingRedirectUrls,
+      jsonEncode(_pendingRedirectUrls),
+    );
+  }
+
+  Future<void> clearPendingSnapToken(String membershipHistoryId) async {
+    if (!_pendingSnapTokens.containsKey(membershipHistoryId)) return;
+    _pendingSnapTokens.remove(membershipHistoryId);
+    final prefs = await SharedPreferences.getInstance();
+    if (_pendingSnapTokens.isEmpty) {
+      await prefs.remove(_keyPendingSnapTokens);
+    } else {
+      await prefs.setString(
+        _keyPendingSnapTokens,
+        jsonEncode(_pendingSnapTokens),
+      );
+    }
+  }
+
+  Future<void> clearPendingRedirectUrl(String membershipHistoryId) async {
+    if (!_pendingRedirectUrls.containsKey(membershipHistoryId)) return;
+    _pendingRedirectUrls.remove(membershipHistoryId);
+    final prefs = await SharedPreferences.getInstance();
+    if (_pendingRedirectUrls.isEmpty) {
+      await prefs.remove(_keyPendingRedirectUrls);
+    } else {
+      await prefs.setString(
+        _keyPendingRedirectUrls,
+        jsonEncode(_pendingRedirectUrls),
+      );
     }
   }
 
@@ -253,6 +523,43 @@ class SessionManager {
     _userProfile = profile;
     final prefs = await SharedPreferences.getInstance();
     await _saveMap(prefs, _keyUserJson, profile);
+    final verified = _parseVerified(profile);
+    if (verified != null) {
+      _isVerified = verified;
+      await prefs.setBool(_keyUserVerified, verified);
+    }
+    final balance = _parseWalletBalance(profile);
+    if (balance != null) {
+      _walletBalance = balance;
+      await prefs.setInt(_keyWalletBalance, balance);
+    }
+    final customerId = _parseCustomerId(profile);
+    if (customerId != null && customerId.isNotEmpty) {
+      _customerId = customerId;
+      await prefs.setString(_keyCustomerId, customerId);
+      await _secureStorage.write(
+        key: _secureKeyCustomerId,
+        value: customerId,
+      );
+    }
+    final eligible = _parseCustomerEligibility(profile);
+    final verificationStatus = _parseCustomerVerificationStatus(profile);
+    if (verificationStatus != null) {
+      _customerVerificationStatus = verificationStatus;
+      _customerEligible = verificationStatus == 'verified';
+      await prefs.setString(
+        _keyCustomerVerificationStatus,
+        verificationStatus,
+      );
+      await prefs.setBool(_keyCustomerEligible, _customerEligible);
+    } else if (eligible != null) {
+      _customerEligible = eligible;
+      await prefs.setBool(_keyCustomerEligible, eligible);
+    }
+    final active = _parseHasActivePackage(profile);
+    if (active != null) {
+      _hasActivePackage = active;
+    }
     final emotor = profile?['emotor'];
     if (emotor is Map<String, dynamic>) {
       final id = emotor['id']?.toString().trim();
@@ -284,6 +591,43 @@ class SessionManager {
     _walletProfile = profile;
     final prefs = await SharedPreferences.getInstance();
     await _saveMap(prefs, _keyWalletJson, profile);
+    final verified = _parseVerified(profile);
+    if (verified != null) {
+      _isVerified = verified;
+      await prefs.setBool(_keyUserVerified, verified);
+    }
+    final balance = _parseWalletBalance(profile);
+    if (balance != null) {
+      _walletBalance = balance;
+      await prefs.setInt(_keyWalletBalance, balance);
+    }
+    final customerId = _parseCustomerId(profile);
+    if (customerId != null && customerId.isNotEmpty) {
+      _customerId = customerId;
+      await prefs.setString(_keyCustomerId, customerId);
+      await _secureStorage.write(
+        key: _secureKeyCustomerId,
+        value: customerId,
+      );
+    }
+    final eligible = _parseCustomerEligibility(profile);
+    final verificationStatus = _parseCustomerVerificationStatus(profile);
+    if (verificationStatus != null) {
+      _customerVerificationStatus = verificationStatus;
+      _customerEligible = verificationStatus == 'verified';
+      await prefs.setString(
+        _keyCustomerVerificationStatus,
+        verificationStatus,
+      );
+      await prefs.setBool(_keyCustomerEligible, _customerEligible);
+    } else if (eligible != null) {
+      _customerEligible = eligible;
+      await prefs.setBool(_keyCustomerEligible, eligible);
+    }
+    final active = _parseHasActivePackage(profile);
+    if (active != null) {
+      _hasActivePackage = active;
+    }
   }
 
   void clear() {
@@ -295,6 +639,19 @@ class SessionManager {
     _userProfile = null;
     _emotorProfile = null;
     _walletProfile = null;
+    _isVerified = false;
+    _walletBalance = null;
+    _customerId = null;
+    _customerEligible = false;
+    _customerVerificationStatus = 'not_verified';
+    _membershipExpiresAt = null;
+    _membershipName = null;
+    _dashboardEmotorNumber = null;
+    _dashboardRemainingSeconds = null;
+    _dashboardEmission = null;
+    _dashboardRideRange = null;
+    _pendingSnapTokens = {};
+    _pendingRedirectUrls = {};
     _refreshToken = null;
     unawaited(_clearStorage());
   }
@@ -303,6 +660,19 @@ class SessionManager {
     _user = null;
     _userProfile = null;
     _walletProfile = null;
+    _isVerified = false;
+    _walletBalance = null;
+    _customerId = null;
+    _customerEligible = false;
+    _customerVerificationStatus = 'not_verified';
+    _membershipExpiresAt = null;
+    _membershipName = null;
+    _dashboardEmotorNumber = null;
+    _dashboardRemainingSeconds = null;
+    _dashboardEmission = null;
+    _dashboardRideRange = null;
+    _pendingSnapTokens = {};
+    _pendingRedirectUrls = {};
     _refreshToken = null;
     unawaited(_clearAuthStorage());
   }
@@ -312,6 +682,7 @@ class SessionManager {
     await _secureStorage.delete(key: _secureKeyAccessToken);
     await _secureStorage.delete(key: _secureKeyRefreshToken);
     await _secureStorage.delete(key: _secureKeyUserId);
+    await _secureStorage.delete(key: _secureKeyCustomerId);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);
@@ -321,6 +692,20 @@ class SessionManager {
     await prefs.remove(_keyUserJson);
     await prefs.remove(_keyEmotorJson);
     await prefs.remove(_keyWalletJson);
+    await prefs.remove(_keyUserVerified);
+    await prefs.remove(_keyWalletBalance);
+    await prefs.remove(_keyOnboardingSeen);
+    await prefs.remove(_keyCustomerId);
+    await prefs.remove(_keyCustomerEligible);
+    await prefs.remove(_keyCustomerVerificationStatus);
+    await prefs.remove(_keyMembershipExpiresAt);
+    await prefs.remove(_keyMembershipName);
+    await prefs.remove(_keyDashboardEmotorNumber);
+    await prefs.remove(_keyDashboardRemainingSeconds);
+    await prefs.remove(_keyDashboardEmission);
+    await prefs.remove(_keyDashboardRideRange);
+    await prefs.remove(_keyPendingSnapTokens);
+    await prefs.remove(_keyPendingRedirectUrls);
     await prefs.remove(_keyRentalJson);
     await prefs.remove(_keyRentalStartedAt);
   }
@@ -329,18 +714,43 @@ class SessionManager {
     final prefs = await SharedPreferences.getInstance();
     await _secureStorage.delete(key: _secureKeyAccessToken);
     await _secureStorage.delete(key: _secureKeyRefreshToken);
+    await _secureStorage.delete(key: _secureKeyCustomerId);
     await prefs.remove(_keyToken);
     await prefs.remove(_keyName);
     await prefs.remove(_keyEmail);
     await prefs.remove(_keyUserId);
     await prefs.remove(_keyUserJson);
     await prefs.remove(_keyWalletJson);
+    await prefs.remove(_keyUserVerified);
+    await prefs.remove(_keyWalletBalance);
+    // Keep onboarding flag on auth clear.
+    await prefs.remove(_keyCustomerId);
+    await prefs.remove(_keyCustomerEligible);
+    await prefs.remove(_keyCustomerVerificationStatus);
+    await prefs.remove(_keyMembershipExpiresAt);
+    await prefs.remove(_keyMembershipName);
+    await prefs.remove(_keyDashboardEmotorNumber);
+    await prefs.remove(_keyDashboardRemainingSeconds);
+    await prefs.remove(_keyDashboardEmission);
+    await prefs.remove(_keyDashboardRideRange);
+    await prefs.remove(_keyPendingSnapTokens);
+    await prefs.remove(_keyPendingRedirectUrls);
   }
 
   Future<void> saveRefreshToken(String token) async {
     if (token.isEmpty) return;
     _refreshToken = token;
     await _secureStorage.write(key: _secureKeyRefreshToken, value: token);
+  }
+
+  Future<void> setCustomerVerificationStatus(String? raw) async {
+    final normalized = _normalizeVerificationStatus(raw);
+    if (normalized == null) return;
+    _customerVerificationStatus = normalized;
+    _customerEligible = normalized == 'verified';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyCustomerVerificationStatus, normalized);
+    await prefs.setBool(_keyCustomerEligible, _customerEligible);
   }
 
   Map<String, dynamic>? _decodeMap(String? raw) {
@@ -392,5 +802,273 @@ class SessionManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyRentalJson);
     await prefs.remove(_keyRentalStartedAt);
+  }
+
+  bool? _parseVerified(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final keys = {
+      'verified',
+      'is_verified',
+      'isverified',
+      'verify_status',
+      'document_verified',
+      'documentverified',
+      'kyc_verified',
+      'kycverified',
+      'verification_status',
+      'status_verifikasi',
+      'statusverifikasi',
+    };
+    bool? walk(dynamic value) {
+      if (value == null) return null;
+      if (value is Map<String, dynamic>) {
+        for (final entry in value.entries) {
+          final key = entry.key.toString().toLowerCase();
+          if (keys.contains(key) || key.contains('verify_status')) {
+            final parsed = _parseBool(entry.value);
+            if (parsed != null) return parsed;
+          }
+          final nested = walk(entry.value);
+          if (nested != null) return nested;
+        }
+      } else if (value is List) {
+        for (final item in value) {
+          final nested = walk(item);
+          if (nested != null) return nested;
+        }
+      }
+      return null;
+    }
+
+    return walk(data);
+  }
+
+  int? _parseWalletBalance(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final keys = [
+      'balance',
+      'saldo',
+      'amount',
+      'current_balance',
+      'currentBalance',
+      'balance_amount',
+      'balanceAmount',
+      'wallet_balance',
+      'walletBalance',
+      'total',
+    ];
+    for (final key in keys) {
+      final value = data[key];
+      final parsed = _parseInt(value);
+      if (parsed != null) return parsed;
+    }
+    final wallet = data['wallet'];
+    if (wallet is Map<String, dynamic>) {
+      return _parseWalletBalance(wallet);
+    }
+    final customer = data['Customer'] ?? data['customer'];
+    if (customer is Map<String, dynamic>) {
+      final customerWallet =
+          customer['CustomerWallet'] ?? customer['customerWallet'] ?? customer['customer_wallet'];
+      if (customerWallet is Map<String, dynamic>) {
+        return _parseWalletBalance(customerWallet);
+      }
+    }
+    return null;
+  }
+
+  bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final text = value.trim().toLowerCase();
+      if (text.isEmpty) return null;
+      if (text == 'true' || text == 'yes' || text == 'y' || text == '1') {
+        return true;
+      }
+      if (text == 'false' || text == 'no' || text == 'n' || text == '0') {
+        return false;
+      }
+      if (text == 'verified' || text == 'active' || text == 'approved') {
+        return true;
+      }
+      if (text == 'unverified' || text == 'inactive' || text == 'rejected') {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleaned.isEmpty) return null;
+      return int.tryParse(cleaned);
+    }
+    return null;
+  }
+
+  bool? _parseHasActivePackage(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final keys = [
+      'has_active_package',
+      'hasActivePackage',
+      'active_package',
+      'activePackage',
+      'membership_active',
+      'membershipActive',
+      'is_membership_active',
+      'isMembershipActive',
+      'subscription_active',
+      'subscriptionActive',
+      'package_active',
+      'packageActive',
+      'membership',
+      'subscription',
+    ];
+    for (final key in keys) {
+      final value = data[key];
+      if (value is Map<String, dynamic>) {
+        final nested = _parseHasActivePackage(value);
+        if (nested != null) return nested;
+        continue;
+      }
+      final parsed = _parseBool(value);
+      if (parsed != null) return parsed;
+    }
+    final status = data['membership_status'] ??
+        data['membershipStatus'] ??
+        data['status_membership'] ??
+        data['subscription_status'] ??
+        data['subscriptionStatus'];
+    final statusParsed = _parseBool(status);
+    if (statusParsed != null) return statusParsed;
+    final expires = data['membership_expires_at'] ??
+        data['membershipExpiresAt'] ??
+        data['subscription_expires_at'] ??
+        data['subscriptionExpiresAt'] ??
+        data['expired_at'] ??
+        data['expiredAt'] ??
+        data['valid_until'] ??
+        data['validUntil'];
+    if (expires != null) {
+      final parsedDate = DateTime.tryParse(expires.toString());
+      if (parsedDate != null) {
+        return parsedDate.isAfter(DateTime.now());
+      }
+    }
+    return null;
+  }
+
+  String? _parseCustomerId(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    String? read(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+
+    final direct = read(data['customer_id']) ??
+        read(data['customerId']) ??
+        read(data['id_customer']);
+    if (direct != null) return direct;
+    final customer = data['Customer'] ?? data['customer'];
+    if (customer is Map<String, dynamic>) {
+      return read(customer['id']) ??
+          read(customer['customer_id']) ??
+          read(customer['id_customer']);
+    }
+    return null;
+  }
+
+  bool? _parseCustomerEligibility(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    Map<String, dynamic>? customer;
+    final raw = data['Customer'] ?? data['customer'];
+    if (raw is Map<String, dynamic>) {
+      customer = raw;
+    }
+    bool? parse(dynamic value) => _parseBool(value);
+    final cert = customer?['certification_status'] ?? customer?['certificationStatus'];
+    final status = customer?['status'];
+    final certParsed = parse(cert);
+    if (certParsed != null) return certParsed;
+    final statusParsed = parse(status);
+    if (statusParsed != null) return statusParsed;
+    if (cert != null) {
+      final text = cert.toString().toLowerCase();
+      if (text.contains('verified') || text.contains('approved')) return true;
+      if (text.contains('pending') || text.contains('reject')) return false;
+    }
+    if (status != null) {
+      final text = status.toString().toLowerCase();
+      if (text.contains('active') || text.contains('verified')) return true;
+      if (text.contains('inactive') || text.contains('pending')) return false;
+    }
+    return null;
+  }
+
+  String? _parseCustomerVerificationStatus(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    Map<String, dynamic>? customer;
+    final raw = data['Customer'] ?? data['customer'];
+    if (raw is Map<String, dynamic>) {
+      customer = raw;
+    }
+
+    String? read(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+
+    final cert = read(customer?['certification_status'] ??
+        customer?['certificationStatus'] ??
+        data['certification_status'] ??
+        data['certificationStatus']);
+    final normalized = _normalizeVerificationStatus(cert);
+    if (normalized != null) return normalized;
+    final verify = data['verify_status'] ??
+        data['verified'] ??
+        data['is_verified'] ??
+        customer?['verify_status'];
+
+    if (verify is bool) {
+      return verify ? 'verified' : 'not_verified';
+    }
+    if (verify != null) {
+      final text = verify.toString().toLowerCase();
+      if (text == 'true' || text == '1') return 'verified';
+      if (text == 'false' || text == '0') return 'not_verified';
+    }
+    return null;
+  }
+
+  String? _normalizeVerificationStatus(String? raw) {
+    if (raw == null) return null;
+    final text = raw.toString().trim().toLowerCase();
+    if (text.isEmpty) return null;
+    if (text.contains('real_name') ||
+        text.contains('verified') ||
+        text.contains('approved')) {
+      return 'verified';
+    }
+    if (text.contains('under_review') ||
+        text.contains('under review') ||
+        text.contains('pending') ||
+        text.contains('review')) {
+      return 'under_review';
+    }
+    if (text.contains('audit_failed') ||
+        text.contains('rejected') ||
+        text.contains('not_certified') ||
+        text.contains('unverified')) {
+      return 'not_verified';
+    }
+    return null;
   }
 }
