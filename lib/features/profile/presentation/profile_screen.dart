@@ -7,6 +7,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../membership/presentation/membership_screen.dart';
 import '../../recharge/presentation/recharge_screen.dart';
 import '../../profile/presentation/document_screen.dart';
+import '../../profile/data/user_service.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../components/bottom_nav.dart';
 import '../../../components/active_rental_logout_dialog.dart';
@@ -23,6 +24,36 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final UserService _userService = UserService();
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshProfile();
+  }
+
+  Future<void> _refreshProfile() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    try {
+      final userId = await SessionManager.instance.resolveUserId();
+      if (userId.isEmpty) return;
+      final profile = await _userService.fetchUserById(userId);
+      if (!mounted) return;
+      if (profile != null) {
+        await SessionManager.instance.saveUserProfile(profile);
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {
+      // silent: profile page should still render cached data
+    } finally {
+      _refreshing = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     String? readText(dynamic value) {

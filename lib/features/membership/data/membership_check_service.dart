@@ -34,12 +34,20 @@ class MembershipCheckService {
     final membershipName = _extractMembershipName(data);
     await SessionManager.instance.setMembershipName(membershipName);
     final raw = data['isHaveMembership'] ?? data['is_have_membership'];
-    if (raw is bool) return raw;
+    if (raw is bool) {
+      if (!raw) {
+        await SessionManager.instance.clearMembershipState();
+      }
+      return raw;
+    }
     if (raw is num) return raw != 0;
     if (raw is String) {
       final text = raw.toLowerCase().trim();
       if (text == 'true' || text == 'yes' || text == '1') return true;
-      if (text == 'false' || text == 'no' || text == '0') return false;
+      if (text == 'false' || text == 'no' || text == '0') {
+        await SessionManager.instance.clearMembershipState();
+        return false;
+      }
     }
     return null;
   }
@@ -100,10 +108,23 @@ class MembershipCheckService {
       return text.isEmpty ? null : text;
     }
 
+    DateTime? parseServerDate(String raw) {
+      final text = raw.trim();
+      if (text.isEmpty) return null;
+      final hasTz = text.endsWith('Z') ||
+          text.contains('+') ||
+          RegExp(r'-\d{2}:?\d{2}$').hasMatch(text);
+      final normalized = hasTz ? text : '${text}Z';
+      final parsed = DateTime.tryParse(normalized);
+      if (parsed == null) return null;
+      // Backend time is already local; prevent +8 shift in app.
+      return parsed.subtract(const Duration(hours: 8));
+    }
+
     final history = data['membershipHistory'] ?? data['membership_history'];
     if (history is Map<String, dynamic>) {
       final expires = read(history['expired_at'] ?? history['expiredAt']);
-      if (expires != null) return DateTime.tryParse(expires);
+      if (expires != null) return parseServerDate(expires);
     }
     return null;
   }

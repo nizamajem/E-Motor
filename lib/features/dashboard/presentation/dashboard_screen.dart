@@ -189,7 +189,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           (data.remainingSeconds != null && data.remainingSeconds! > 0) ||
               (data.validUntil != null &&
                   data.validUntil!.isAfter(DateTime.now()));
-      SessionManager.instance.setHasActivePackage(activeFromDashboard);
+      if (!activeFromDashboard) {
+        await SessionManager.instance.clearMembershipState();
+      } else {
+        SessionManager.instance.setHasActivePackage(activeFromDashboard);
+      }
       if (mounted) {
         setState(() {});
         setState(() {
@@ -1546,10 +1550,10 @@ class _NewDashboardContent extends StatelessWidget {
     final expiresAt = SessionManager.instance.membershipExpiresAt;
     final membershipName =
         SessionManager.instance.membershipName ?? l10n.packageDefault;
-    final remainingFromSession = SessionManager.instance.getRemainingSecondsNow();
     final remainingFromExpiry = _remainingSecondsFromExpiry(expiresAt);
+    final remainingFromSession = SessionManager.instance.getRemainingSecondsNow();
     final remainingSeconds =
-        remainingFromSession > 0 ? remainingFromSession : remainingFromExpiry;
+        remainingFromExpiry > 0 ? remainingFromExpiry : remainingFromSession;
     String formatCountdown(int seconds) {
       if (seconds < 0) seconds = 0;
       final hours = seconds ~/ 3600;
@@ -2011,6 +2015,7 @@ class _PackageSummaryCard extends StatelessWidget {
 
   String _formatDateTime(DateTime? dt) {
     if (dt == null) return '--';
+    dt = dt.toLocal();
     const months = [
       'Jan',
       'Feb',

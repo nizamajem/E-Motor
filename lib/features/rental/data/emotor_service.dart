@@ -129,7 +129,19 @@ class DashboardRefreshData {
     final packageName = text(json['packageName'] ?? json['package_name']);
     final remaining =
         toInt(json['membershipDurationRemaining'] ?? json['durationRemaining']);
-    final validUntil = DateTime.tryParse(
+    DateTime? parseServerDate(String raw) {
+      if (raw.isEmpty) return null;
+      final hasTz = raw.endsWith('Z') ||
+          raw.contains('+') ||
+          RegExp(r'-\d{2}:?\d{2}$').hasMatch(raw);
+      final normalized = hasTz ? raw : '${raw}Z';
+      final parsed = DateTime.tryParse(normalized);
+      if (parsed == null) return null;
+      // Backend time is already local; prevent +8 shift in app.
+      return parsed.subtract(const Duration(hours: 8));
+    }
+
+    final validUntil = parseServerDate(
       text(json['membershipValidUntil'] ?? json['membership_valid_until']),
     );
     final emission = toDouble(

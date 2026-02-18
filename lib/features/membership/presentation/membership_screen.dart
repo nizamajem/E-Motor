@@ -101,6 +101,7 @@ class _MembershipScreenState extends State<MembershipScreen> {
     }
 
     String formatDateTime(DateTime dt) {
+      dt = dt.toLocal();
       const monthsEn = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',

@@ -390,6 +390,19 @@ class SessionManager {
     }
   }
 
+  Future<void> clearMembershipState() async {
+    _membershipExpiresAt = null;
+    _membershipName = null;
+    _dashboardRemainingSeconds = null;
+    _dashboardRemainingUpdatedAt = null;
+    _hasActivePackage = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyMembershipExpiresAt);
+    await prefs.remove(_keyMembershipName);
+    await prefs.remove(_keyDashboardRemainingSeconds);
+    await prefs.remove(_keyDashboardRemainingUpdatedAt);
+  }
+
   Future<void> setDashboardData({
     String? emotorNumber,
     int? remainingSeconds,
@@ -400,14 +413,22 @@ class SessionManager {
   }) async {
     _dashboardEmotorNumber =
         (emotorNumber?.trim().isEmpty ?? true) ? null : emotorNumber!.trim();
-    _dashboardRemainingSeconds = remainingSeconds;
-    if (remainingSeconds != null) {
-      _dashboardRemainingUpdatedAt = DateTime.now();
-    }
     _dashboardEmission = emissionReduction;
     _dashboardRideRange = rideRange;
     if (validUntil != null) {
       _membershipExpiresAt = validUntil;
+      final diff = validUntil.difference(DateTime.now()).inSeconds;
+      if (diff > 0) {
+        _dashboardRemainingSeconds = diff;
+      } else {
+        _dashboardRemainingSeconds = 0;
+      }
+      _dashboardRemainingUpdatedAt = DateTime.now();
+    } else {
+      _dashboardRemainingSeconds = remainingSeconds;
+      if (remainingSeconds != null) {
+        _dashboardRemainingUpdatedAt = DateTime.now();
+      }
     }
     if (packageName != null && packageName.trim().isNotEmpty) {
       _membershipName = packageName.trim();

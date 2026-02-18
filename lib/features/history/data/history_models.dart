@@ -102,9 +102,9 @@ class HistoryEntry {
 
     String formatTime(DateTime? dt) {
       if (dt == null) return '-';
-      final shifted = dt.add(const Duration(hours: 8));
-      final hour = shifted.hour.toString().padLeft(2, '0');
-      final minute = shifted.minute.toString().padLeft(2, '0');
+      final local = dt.toLocal();
+      final hour = local.hour.toString().padLeft(2, '0');
+      final minute = local.minute.toString().padLeft(2, '0');
       return '$hour:$minute';
     }
 
