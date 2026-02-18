@@ -92,7 +92,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       final refresh = await _rentalService.refreshDashboard();
       if (!mounted) return;
 
+      final isOn = refresh.emotorStatus.toUpperCase().contains('ACC_ON');
+
       setState(() {
+        _isActive = isOn; // ✅ INI YANG PENTING
+
         if (_rental != null) {
           _rental = RentalSession(
             id: _rental!.id,
@@ -100,12 +104,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             plate: refresh.emotorNumber,
             rangeKm: refresh.rideRange,
             batteryPercent: _rental!.batteryPercent,
-            motorOn: _rental!.motorOn,
+            motorOn: isOn, // ✅ update juga rental
             rideHistoryId: _rental!.rideHistoryId,
           );
           SessionManager.instance.saveRental(_rental!);
         }
-        // ❗ jangan ubah _hasRental di sini
       });
     } catch (e) {
       debugPrint('Refresh dashboard failed: $e');

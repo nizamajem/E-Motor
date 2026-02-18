@@ -862,6 +862,7 @@ class DashboardRefresh {
     required this.membershipValidUntil,
     required this.emissionReduction,
     required this.rideRange,
+    required this.emotorStatus, // ✅ tambah ini
   });
 
   factory DashboardRefresh.fromJson(Map<String, dynamic> json) {
@@ -875,6 +876,7 @@ class DashboardRefresh {
       ),
       emissionReduction: (json['emissionReduction'] ?? 0).toDouble(),
       rideRange: (json['rideRange'] ?? 0).toDouble(),
+      emotorStatus: json['emotorStatus']?.toString() ?? '',
     );
   }
 
@@ -884,4 +886,5 @@ class DashboardRefresh {
   final DateTime? membershipValidUntil;
   final double emissionReduction;
   final double rideRange;
+  final String emotorStatus; // ✅
 }
