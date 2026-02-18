@@ -185,6 +185,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         emissionReduction: data.emissionReduction,
         rideRange: data.rideRange,
       );
+      final statusRaw = data.emotorStatus.trim().toUpperCase();
+      final motorOn = statusRaw == 'ACC_ON' ||
+          statusRaw == 'ON' ||
+          statusRaw == 'START' ||
+          statusRaw == 'ENGINE_ON';
       final activeFromDashboard =
           (data.remainingSeconds != null && data.remainingSeconds! > 0) ||
               (data.validUntil != null &&
@@ -195,8 +200,20 @@ class _DashboardScreenState extends State<DashboardScreen>
         SessionManager.instance.setHasActivePackage(activeFromDashboard);
       }
       if (mounted) {
-        setState(() {});
         setState(() {
+          _isActive = motorOn;
+          if (_rental != null) {
+            _rental = RentalSession(
+              id: _rental!.id,
+              emotorId: _rental!.emotorId,
+              plate: _rental!.plate,
+              rangeKm: _rental!.rangeKm,
+              batteryPercent: _rental!.batteryPercent,
+              motorOn: motorOn,
+              rideHistoryId: _rental!.rideHistoryId,
+            );
+            SessionManager.instance.saveRental(_rental!);
+          }
           _requireStart = !_hasRental && !activeFromDashboard;
         });
         _ensureTimer();

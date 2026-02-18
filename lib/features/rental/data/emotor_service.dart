@@ -104,6 +104,7 @@ class EmotorService {
 class DashboardRefreshData {
   DashboardRefreshData({
     required this.emotorNumber,
+    required this.emotorStatus,
     required this.packageName,
     required this.remainingSeconds,
     required this.validUntil,
@@ -126,6 +127,7 @@ class DashboardRefreshData {
     }
 
     final emotorNumber = text(json['emotorNumber'] ?? json['emotor_number']);
+    final emotorStatus = text(json['emotorStatus'] ?? json['emotor_status']);
     final packageName = text(json['packageName'] ?? json['package_name']);
     final remaining =
         toInt(json['membershipDurationRemaining'] ?? json['durationRemaining']);
@@ -151,6 +153,7 @@ class DashboardRefreshData {
 
     return DashboardRefreshData(
       emotorNumber: emotorNumber,
+      emotorStatus: emotorStatus,
       packageName: packageName,
       remainingSeconds: remaining,
       validUntil: validUntil,
@@ -160,6 +163,7 @@ class DashboardRefreshData {
   }
 
   final String emotorNumber;
+  final String emotorStatus;
   final String packageName;
   final int remainingSeconds;
   final DateTime? validUntil;
