@@ -149,3 +149,31 @@ class AppBottomNav extends StatelessWidget {
     );
   }
 }
+
+class AppBottomNavBar extends StatelessWidget {
+  const AppBottomNavBar({
+    super.key,
+    required this.activeTab,
+    this.onHistoryTap,
+    this.onDashboardTap,
+    this.onProfileTap,
+  });
+
+  final BottomNavTab activeTab;
+  final VoidCallback? onHistoryTap;
+  final VoidCallback? onDashboardTap;
+  final VoidCallback? onProfileTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: AppBottomNav(
+        activeTab: activeTab,
+        onHistoryTap: onHistoryTap,
+        onDashboardTap: onDashboardTap,
+        onProfileTap: onProfileTap,
+      ),
+    );
+  }
+}

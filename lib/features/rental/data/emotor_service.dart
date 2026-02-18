@@ -88,6 +88,17 @@ class EmotorService {
     if (data is! Map<String, dynamic>) return null;
     return DashboardRefreshData.fromJson(data);
   }
+
+  Future<AdditionalInfo?> fetchAdditionalInfo(String customerId) async {
+    if (customerId.isEmpty) return null;
+    final res = await _client.getJson(
+      '${ApiConfig.additionalInfoPath}/$customerId',
+      auth: true,
+    );
+    final data = res['data'] ?? res;
+    if (data is! Map<String, dynamic>) return null;
+    return AdditionalInfo.fromJson(data);
+  }
 }
 
 class DashboardRefreshData {
@@ -142,4 +153,43 @@ class DashboardRefreshData {
   final DateTime? validUntil;
   final double emissionReduction;
   final int rideRange;
+}
+
+class AdditionalInfo {
+  AdditionalInfo({
+    required this.additionalPayment,
+    required this.overtimeSeconds,
+    required this.overtimeBlockMinutes,
+    required this.overtimeBlocks,
+  });
+
+  factory AdditionalInfo.fromJson(Map<String, dynamic> json) {
+    double toDouble(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0;
+    }
+
+    int toInt(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString()) ?? 0;
+    }
+
+    return AdditionalInfo(
+      additionalPayment: toDouble(
+        json['additionalPayment'] ?? json['additional_payment'],
+      ),
+      overtimeSeconds: toInt(json['overtimeSeconds'] ?? json['overtime_seconds']),
+      overtimeBlockMinutes:
+          toInt(json['overtimeBlockMinutes'] ?? json['overtime_block_minutes']),
+      overtimeBlocks:
+          toInt(json['overtimeBlocks'] ?? json['overtime_blocks']),
+    );
+  }
+
+  final double additionalPayment;
+  final int overtimeSeconds;
+  final int overtimeBlockMinutes;
+  final int overtimeBlocks;
 }

@@ -87,6 +87,8 @@ class SessionManager {
       'session_dashboard_remaining_seconds';
   static const _keyDashboardEmission = 'session_dashboard_emission';
   static const _keyDashboardRideRange = 'session_dashboard_ride_range';
+  static const _keyDashboardRemainingUpdatedAt =
+      'session_dashboard_remaining_updated_at';
   static const _keyPendingSnapTokens = 'session_pending_snap_tokens';
   static const _keyPendingRedirectUrls = 'session_pending_redirect_urls';
   static const _keyRentalJson = 'session_rental_json';
@@ -114,6 +116,7 @@ class SessionManager {
   String? _membershipName;
   String? _dashboardEmotorNumber;
   int? _dashboardRemainingSeconds;
+  DateTime? _dashboardRemainingUpdatedAt;
   double? _dashboardEmission;
   int? _dashboardRideRange;
   Map<String, String> _pendingSnapTokens = {};
@@ -142,6 +145,7 @@ class SessionManager {
   String? get membershipName => _membershipName;
   String? get dashboardEmotorNumber => _dashboardEmotorNumber;
   int? get dashboardRemainingSeconds => _dashboardRemainingSeconds;
+  DateTime? get dashboardRemainingUpdatedAt => _dashboardRemainingUpdatedAt;
   double? get dashboardEmission => _dashboardEmission;
   int? get dashboardRideRange => _dashboardRideRange;
   String? getPendingSnapToken(String membershipHistoryId) =>
@@ -224,6 +228,13 @@ class SessionManager {
     _membershipName = prefs.getString(_keyMembershipName);
     _dashboardEmotorNumber = prefs.getString(_keyDashboardEmotorNumber);
     _dashboardRemainingSeconds = prefs.getInt(_keyDashboardRemainingSeconds);
+    final remainingUpdatedMs = prefs.getInt(_keyDashboardRemainingUpdatedAt);
+    if (remainingUpdatedMs != null && remainingUpdatedMs > 0) {
+      _dashboardRemainingUpdatedAt =
+          DateTime.fromMillisecondsSinceEpoch(remainingUpdatedMs);
+    } else if (_dashboardRemainingSeconds != null) {
+      _dashboardRemainingUpdatedAt = DateTime.now();
+    }
     _dashboardEmission = prefs.getDouble(_keyDashboardEmission);
     _dashboardRideRange = prefs.getInt(_keyDashboardRideRange);
     final pendingRaw = prefs.getString(_keyPendingSnapTokens);
@@ -390,6 +401,9 @@ class SessionManager {
     _dashboardEmotorNumber =
         (emotorNumber?.trim().isEmpty ?? true) ? null : emotorNumber!.trim();
     _dashboardRemainingSeconds = remainingSeconds;
+    if (remainingSeconds != null) {
+      _dashboardRemainingUpdatedAt = DateTime.now();
+    }
     _dashboardEmission = emissionReduction;
     _dashboardRideRange = rideRange;
     if (validUntil != null) {
@@ -409,11 +423,18 @@ class SessionManager {
     }
     if (_dashboardRemainingSeconds == null) {
       await prefs.remove(_keyDashboardRemainingSeconds);
+      await prefs.remove(_keyDashboardRemainingUpdatedAt);
     } else {
       await prefs.setInt(
         _keyDashboardRemainingSeconds,
         _dashboardRemainingSeconds!,
       );
+      if (_dashboardRemainingUpdatedAt != null) {
+        await prefs.setInt(
+          _keyDashboardRemainingUpdatedAt,
+          _dashboardRemainingUpdatedAt!.millisecondsSinceEpoch,
+        );
+      }
     }
     if (_dashboardEmission == null) {
       await prefs.remove(_keyDashboardEmission);
@@ -437,6 +458,16 @@ class SessionManager {
         packageName.trim(),
       );
     }
+  }
+
+  int getRemainingSecondsNow() {
+    final base = _dashboardRemainingSeconds;
+    if (base == null) return 0;
+    final updatedAt = _dashboardRemainingUpdatedAt;
+    if (updatedAt == null) return base;
+    final elapsed = DateTime.now().difference(updatedAt).inSeconds;
+    final remaining = base - elapsed;
+    return remaining > 0 ? remaining : 0;
   }
 
   Future<void> savePendingSnapToken({

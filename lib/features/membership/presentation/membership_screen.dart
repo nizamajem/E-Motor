@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -7,6 +9,7 @@ import '../../../core/session/session_manager.dart';
 import '../../../components/app_motion.dart';
 import '../data/membership_models.dart';
 import '../data/membership_service.dart';
+import '../../membership/data/membership_check_service.dart';
 import '../../payment/presentation/payment_screen.dart';
 
 class MembershipScreen extends StatefulWidget {
@@ -18,17 +21,60 @@ class MembershipScreen extends StatefulWidget {
 
 class _MembershipScreenState extends State<MembershipScreen> {
   late Future<List<MembershipPackage>> _membershipsFuture;
+  Timer? _ticker;
+  bool _activeFromCheck = false;
 
   @override
   void initState() {
     super.initState();
     _membershipsFuture = MembershipService().fetchMembershipsForEmotor();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    _loadActiveMembership();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadActiveMembership() async {
+    final customerId = SessionManager.instance.customerId ?? '';
+    if (customerId.isEmpty) return;
+    try {
+      final active = await MembershipCheckService()
+          .checkMembership(customerId: customerId);
+      if (!mounted || active == null) return;
+      SessionManager.instance.setHasActivePackage(active);
+      setState(() {
+        _activeFromCheck = active;
+      });
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final walletBalance = SessionManager.instance.walletBalance ?? 10000;
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final activeName =
+        SessionManager.instance.membershipName ?? l10n.packageDefault;
+    final activeExpiresAt = SessionManager.instance.membershipExpiresAt;
+    String? activeEmotor = SessionManager.instance.dashboardEmotorNumber;
+    if (activeEmotor == null || activeEmotor.isEmpty) {
+      final emotorMap = SessionManager.instance.userProfile?['emotor'];
+      if (emotorMap is Map<String, dynamic>) {
+        activeEmotor = emotorMap['vehicle_number']?.toString();
+      }
+    }
+    final remainingSeconds = SessionManager.instance.getRemainingSecondsNow();
+    final hasActive = (activeExpiresAt != null &&
+            activeExpiresAt.isAfter(DateTime.now())) ||
+        remainingSeconds > 0 ||
+        _activeFromCheck ||
+        SessionManager.instance.hasActivePackage;
     String durationHours(int hours) {
       if (hours >= 24) {
         final days = hours ~/ 24;
@@ -46,6 +92,45 @@ class _MembershipScreenState extends State<MembershipScreen> {
       return '${l10n.validFor} $label';
     }
     String minBalance(String amount) => '${l10n.minBalancePrefix} $amount';
+    String formatCountdown(int seconds) {
+      if (seconds <= 0) return '00:00:00';
+      final h = seconds ~/ 3600;
+      final m = (seconds % 3600) ~/ 60;
+      final s = seconds % 60;
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+
+    String formatDateTime(DateTime dt) {
+      const monthsEn = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      const monthsId = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+      ];
+      final months = localeCode == 'id' ? monthsId : monthsEn;
+      final day = dt.day.toString().padLeft(2, '0');
+      final month = months[dt.month - 1];
+      final hour = dt.hour.toString().padLeft(2, '0');
+      final minute = dt.minute.toString().padLeft(2, '0');
+      return '$day $month ${dt.year} $hour:$minute';
+    }
+
+    int computeRemainingSeconds() {
+      if (remainingSeconds > 0) return remainingSeconds;
+      if (activeExpiresAt == null) return 0;
+      final diff = activeExpiresAt.difference(DateTime.now()).inSeconds;
+      return diff > 0 ? diff : 0;
+    }
+
+    DateTime? resolveExpiresAt() {
+      if (activeExpiresAt != null) return activeExpiresAt;
+      if (remainingSeconds > 0) {
+        return DateTime.now().add(Duration(seconds: remainingSeconds));
+      }
+      return null;
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -120,30 +205,45 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       minBalance: minBalance(_formatRupiah(m.minBalance)),
                     );
                   }).toList();
+                  final resolvedExpiresAt = resolveExpiresAt();
 
-                  return SingleChildScrollView(
+                      return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          l10n.startRideTitle,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1E88E5),
+                        if (!hasActive) ...[
+                          Text(
+                            l10n.startRideTitle,
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E88E5),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          l10n.membershipSubtitle,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF9AA0AA),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.membershipSubtitle,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF9AA0AA),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
+                          const SizedBox(height: 14),
+                        ],
+                        if (hasActive) ...[
+                          _ActiveMembershipCard(
+                            packageName: activeName,
+                            validUntil: resolvedExpiresAt == null
+                                ? '--'
+                                : formatDateTime(resolvedExpiresAt),
+                            countdown: formatCountdown(computeRemainingSeconds()),
+                            code: activeEmotor?.toString().trim() ?? '',
+                            note: l10n.overtimeNotice,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         ...packages.map((pkg) => _PackageCard(
                             package: pkg,
                             onBuy: () {
@@ -576,7 +676,7 @@ class _PackageCard extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    'Beli',
+                    AppLocalizations.of(context).buy,
                     style: GoogleFonts.poppins(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
@@ -608,4 +708,126 @@ class _Package {
   final String price;
   final String validity;
   final String minBalance;
+}
+
+class _ActiveMembershipCard extends StatelessWidget {
+  const _ActiveMembershipCard({
+    required this.packageName,
+    required this.validUntil,
+    required this.countdown,
+    required this.code,
+    required this.note,
+  });
+
+  final String packageName;
+  final String validUntil;
+  final String countdown;
+  final String code;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF35A7E6),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  packageName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                validUntil,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Divider(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${AppLocalizations.of(context).timeLeft}:',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            countdown,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (code.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  code,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ),
+          if (code.isNotEmpty) const SizedBox(height: 8),
+          Text(
+            note,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -154,7 +154,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             ),
-            AppBottomNav(
+            AppBottomNavBar(
               activeTab: BottomNavTab.history,
               onDashboardTap: () {
                 Navigator.of(context).pushReplacement(
@@ -253,6 +253,7 @@ class _StatsRow extends StatelessWidget {
     return ListCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       borderColor: const Color(0xFF2C7BFE),
+      backgroundColor: Colors.white,
       boxShadow: const [
         BoxShadow(
           color: Color(0x1A2C7BFE),
@@ -367,22 +368,7 @@ class _HistoryCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE7F2FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  item.totalCost,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF2C7BFE),
-                  ),
-                ),
-              ),
+              const SizedBox(width: 0),
             ],
           ),
           const SizedBox(height: 8),
@@ -655,10 +641,13 @@ class _MembershipHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final status = item.status.toUpperCase();
-    final isActive = status.contains('ACTIVE');
-    final isPending = status.contains('PENDING') ||
-        status.contains('QUEUE') ||
-        item.expiredAt == null;
+    final isExpiredByTime =
+        item.expiredAt != null && item.expiredAt!.isBefore(DateTime.now());
+    final isActive = status.contains('ACTIVE') && !isExpiredByTime;
+    final isPending = !isExpiredByTime &&
+        (status.contains('PENDING') ||
+            status.contains('QUEUE') ||
+            item.expiredAt == null);
     final statusLabel = isActive
         ? l10n.membershipStatusActive
         : isPending

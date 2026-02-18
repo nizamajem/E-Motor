@@ -41,6 +41,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _hasRental = false;
   bool _requireStart = false;
   int _elapsedSeconds = 0;
+  double _additionalPayment = 0;
+  int _overtimeSeconds = 0;
+  DateTime? _lastAdditionalFetch;
+  bool _fetchingAdditional = false;
   RideStatus? _status;
   RentalSession? _rental;
   final RentalService _rentalService = RentalService();
@@ -56,6 +60,17 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _noInternetDialogShown = false;
   bool _resumeInProgress = false;
   bool _authExpiredHandled = false;
+  bool _computeHasActivePackage() {
+    final expiresAt = SessionManager.instance.membershipExpiresAt;
+    if (expiresAt != null && expiresAt.isAfter(DateTime.now())) {
+      return true;
+    }
+    final remaining = SessionManager.instance.getRemainingSecondsNow();
+    if (remaining > 0) {
+      return true;
+    }
+    return SessionManager.instance.hasActivePackage;
+  }
 
   @override
   void initState() {
@@ -66,7 +81,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
     _hasRental = _rental != null;
-    _requireStart = !_hasRental && !SessionManager.instance.hasActivePackage;
+    _requireStart = !_hasRental && !_computeHasActivePackage();
     _elapsedSeconds = 0;
     final startedAt = SessionManager.instance.rentalStartedAt;
     if (_hasRental && startedAt != null) {
@@ -79,6 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _bootstrapRental();
     _checkMembershipStatus();
     _refreshDashboard();
+    _updateAdditionalPayIfNeeded();
   }
 
   @override
@@ -126,11 +142,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         await _bootstrapRental();
       } else {
         setState(() {
-          _requireStart = !SessionManager.instance.hasActivePackage;
+          _requireStart = !_computeHasActivePackage();
         });
       }
       _checkMembershipStatus();
       _refreshDashboard();
+      _updateAdditionalPayIfNeeded();
     } finally {
       _resumeInProgress = false;
     }
@@ -143,10 +160,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       final hasMembership =
           await _membershipCheckService.checkMembership(customerId: customerId);
       if (!mounted || hasMembership == null) return;
-      SessionManager.instance.setHasActivePackage(hasMembership);
+      final active = hasMembership || _computeHasActivePackage();
+      SessionManager.instance.setHasActivePackage(active);
       if (mounted) {
         setState(() {
-          _requireStart = !hasMembership;
+          _requireStart = !_hasRental && !active;
         });
         _ensureTimer();
       }
@@ -167,9 +185,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         emissionReduction: data.emissionReduction,
         rideRange: data.rideRange,
       );
+      final activeFromDashboard =
+          (data.remainingSeconds != null && data.remainingSeconds! > 0) ||
+              (data.validUntil != null &&
+                  data.validUntil!.isAfter(DateTime.now()));
+      SessionManager.instance.setHasActivePackage(activeFromDashboard);
       if (mounted) {
         setState(() {});
+        setState(() {
+          _requireStart = !_hasRental && !activeFromDashboard;
+        });
         _ensureTimer();
+        _updateAdditionalPayIfNeeded();
       }
     } catch (_) {}
   }
@@ -233,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           _status = null;
           _rental = null;
           _hasRental = false;
-          _requireStart = true;
+          _requireStart = !_computeHasActivePackage();
           _isActive = false;
           _elapsedSeconds = 0;
         });
@@ -263,7 +290,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           _status = null;
           _rental = null;
           _hasRental = false;
-          _requireStart = true;
+          _requireStart = !_computeHasActivePackage();
           _isActive = false;
           _elapsedSeconds = 0;
         });
@@ -335,6 +362,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           _elapsedSeconds = data.rideSeconds;
         }
       });
+      _updateAdditionalPayIfNeeded();
       if (_hasRental) {
         _ensureTimer();
       }
@@ -380,6 +408,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         }
         _hasRental = true;
       });
+      _updateAdditionalPayIfNeeded();
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 404 || e.statusCode == 410) {
@@ -398,9 +427,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       _status = null;
       _rental = null;
       _hasRental = false;
-      _requireStart = true;
+      _requireStart = !_computeHasActivePackage();
       _isActive = false;
       _elapsedSeconds = 0;
+      _additionalPayment = 0;
+      _overtimeSeconds = 0;
     });
     SessionManager.instance.clearRental();
     SessionManager.instance.setRentalStartedAt(null);
@@ -579,6 +610,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       emotorName,
     ], emotorFallback);
     final rentalStartedAt = SessionManager.instance.rentalStartedAt;
+    final showStartOverlay = !_hasRental && !_computeHasActivePackage();
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -591,7 +623,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   children: [
                     Expanded(
                       child: AbsorbPointer(
-                        absorbing: _requireStart,
+                        absorbing: showStartOverlay,
                         child: _NewDashboardContent(
                           riderName: riderName,
                           plateText: plateText,
@@ -602,6 +634,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           rentalStartedAt: rentalStartedAt,
                           status: status,
                           rental: rental,
+                          additionalPayment: _additionalPayment,
                           onFind: _handleFind,
                           onToggle: _handleToggle,
                           onViewPackage: _handleGetPackages,
@@ -612,7 +645,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 72),
                   ],
                 ),
-                if (_requireStart)
+                if (showStartOverlay)
                   Positioned.fill(
                     child: _StartRideOverlay(
                       isLoading: false,
@@ -623,7 +656,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: AppBottomNav(
+                  child: AppBottomNavBar(
                     activeTab: BottomNavTab.dashboard,
                     onHistoryTap: () {
                       Navigator.of(context).push(
@@ -708,6 +741,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             SessionManager.instance.saveRental(updatedRental);
           }
         });
+        _updateAdditionalPayIfNeeded(force: true);
       } else {
         _showSnack(l10n.errorSendCommandFailed);
       }
@@ -742,6 +776,49 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _showSnack(String message) {
     showAppSnackBar(context, message);
+  }
+
+  bool _isMembershipExpired() {
+    final expiresAt = SessionManager.instance.membershipExpiresAt;
+    if (expiresAt == null) return false;
+    return expiresAt.isBefore(DateTime.now());
+  }
+
+  Future<void> _updateAdditionalPayIfNeeded({bool force = false}) async {
+    if (!mounted) return;
+    final customerId = SessionManager.instance.customerId ?? '';
+    if (customerId.isEmpty || SessionManager.instance.token == null) return;
+
+    final expired = _isMembershipExpired();
+    final motorOn = _isActive;
+    if (!expired || !motorOn) {
+      if (_additionalPayment != 0 || _overtimeSeconds != 0) {
+        setState(() {
+          _additionalPayment = 0;
+          _overtimeSeconds = 0;
+        });
+      }
+      return;
+    }
+
+    if (_fetchingAdditional) return;
+    if (!force && _lastAdditionalFetch != null) {
+      final diff = DateTime.now().difference(_lastAdditionalFetch!);
+      if (diff.inSeconds < 10) return;
+    }
+
+    _fetchingAdditional = true;
+    _lastAdditionalFetch = DateTime.now();
+    try {
+      final info = await _emotorService.fetchAdditionalInfo(customerId);
+      if (!mounted || info == null) return;
+      setState(() {
+        _additionalPayment = info.additionalPayment;
+        _overtimeSeconds = info.overtimeSeconds;
+      });
+    } catch (_) {} finally {
+      _fetchingAdditional = false;
+    }
   }
 
   Future<void> _handleFind() async {
@@ -890,12 +967,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _ensureTimer() {
     final hasCountdown = _hasRental ||
-        SessionManager.instance.membershipExpiresAt != null;
+        SessionManager.instance.membershipExpiresAt != null ||
+        SessionManager.instance.getRemainingSecondsNow() > 0;
     if (_timer != null || !hasCountdown) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (!_hasRental &&
-          SessionManager.instance.membershipExpiresAt == null) {
+          SessionManager.instance.membershipExpiresAt == null &&
+          SessionManager.instance.getRemainingSecondsNow() == 0) {
         _timer?.cancel();
         _timer = null;
         return;
@@ -1433,6 +1512,7 @@ class _NewDashboardContent extends StatelessWidget {
     required this.rentalStartedAt,
     required this.status,
     required this.rental,
+    required this.additionalPayment,
     required this.onFind,
     required this.onToggle,
     required this.onViewPackage,
@@ -1448,6 +1528,7 @@ class _NewDashboardContent extends StatelessWidget {
   final DateTime? rentalStartedAt;
   final RideStatus? status;
   final RentalSession? rental;
+  final double additionalPayment;
   final VoidCallback onFind;
   final ValueChanged<bool> onToggle;
   final VoidCallback onViewPackage;
@@ -1456,19 +1537,19 @@ class _NewDashboardContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final carbonReduction = SessionManager.instance.dashboardEmission ??
-        status?.carbonReduction ??
-        0;
-    final rangeKm = SessionManager.instance.dashboardRideRange ??
-        (status?.rangeKm ?? 0).round();
+    final carbonReduction = SessionManager.instance.dashboardEmission ?? 0;
+    final rangeKm = SessionManager.instance.dashboardRideRange ?? 0;
     final rideSeconds = elapsedSeconds;
-    final needToPayAmount = status?.amountPaid ?? 0;
+    final needToPayAmount = additionalPayment > 0
+        ? additionalPayment
+        : (status?.amountPaid ?? 0);
     final expiresAt = SessionManager.instance.membershipExpiresAt;
     final membershipName =
         SessionManager.instance.membershipName ?? l10n.packageDefault;
+    final remainingFromSession = SessionManager.instance.getRemainingSecondsNow();
+    final remainingFromExpiry = _remainingSecondsFromExpiry(expiresAt);
     final remainingSeconds =
-        SessionManager.instance.dashboardRemainingSeconds ??
-            _remainingSecondsFromExpiry(expiresAt);
+        remainingFromSession > 0 ? remainingFromSession : remainingFromExpiry;
     String formatCountdown(int seconds) {
       if (seconds < 0) seconds = 0;
       final hours = seconds ~/ 3600;

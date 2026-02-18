@@ -48,6 +48,8 @@ class AppLocalizations {
       'payment_pending_body':
           'Please complete your payment using the selected method.',
       'payment_processing': 'Payment is being processed. We will update your status shortly.',
+      'overtime_notice':
+          'Any additional usage will be charged according to pricing rules.',
       'time_left': 'Time left',
       'amount_to_pay': 'Amount to pay',
       'need_to_pay': 'Need to pay',
@@ -295,6 +297,8 @@ class AppLocalizations {
           'Silakan selesaikan pembayaran melalui metode yang dipilih.',
       'payment_processing':
           'Pembayaran sedang diproses. Status akan diperbarui segera.',
+      'overtime_notice':
+          'Jumlah kelebihan akan dibebankan sesuai dengan aturan penetapan harga.',
       'time_left': 'Sisa waktu',
       'amount_to_pay': 'Total yang harus dibayar',
       'need_to_pay': 'Perlu dibayar',
@@ -666,6 +670,7 @@ class AppLocalizations {
   String get paymentPending => _t('payment_pending');
   String get paymentPendingBody => _t('payment_pending_body');
   String get paymentProcessing => _t('payment_processing');
+  String get overtimeNotice => _t('overtime_notice');
   String get timeLeft => _t('time_left');
   String get amountToPay => _t('amount_to_pay');
   String get needToPay => _t('need_to_pay');

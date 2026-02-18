@@ -9,6 +9,7 @@ class ListCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(12),
     this.borderColor,
     this.boxShadow,
+    this.backgroundColor = Colors.white,
   });
 
   final Widget child;
@@ -16,21 +17,25 @@ class ListCard extends StatelessWidget {
   final EdgeInsets padding;
   final Color? borderColor;
   final List<BoxShadow>? boxShadow;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Ink(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor ?? const Color(0xFFE6E9F2)),
-          boxShadow: boxShadow,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor ?? const Color(0xFFE6E9F2)),
+            boxShadow: boxShadow,
+          ),
+          child: child,
         ),
-        child: child,
       ),
     );
   }

@@ -194,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                AppBottomNav(
+                AppBottomNavBar(
                   activeTab: BottomNavTab.profile,
                   onHistoryTap: () {
                     Navigator.of(context).pushReplacement(
@@ -321,14 +321,16 @@ class _WalletCard extends StatelessWidget {
             ),
           ),
           _WalletAction(
-            icon: Icons.account_balance_wallet_outlined,
+            icon: Icons.add_rounded,
             label: topUpLabel,
+            accent: const Color(0xFF2C7BFE),
             onTap: onTopUp,
           ),
           const SizedBox(width: 6),
           _WalletAction(
             icon: Icons.local_offer_outlined,
             label: packageLabel,
+            accent: const Color(0xFF2C7BFE),
             onTap: onPackage,
           ),
         ],
@@ -354,11 +356,13 @@ class _WalletAction extends StatelessWidget {
   const _WalletAction({
     required this.icon,
     required this.label,
+    required this.accent,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
@@ -374,13 +378,13 @@ class _WalletAction extends StatelessWidget {
               height: 30,
               width: 30,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFEAF1FF), Color(0xFFFFFFFF)],
+                gradient: LinearGradient(
+                  colors: [accent.withValues(alpha: 0.18), Colors.white],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFDCE6F4)),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x12000000),
@@ -392,7 +396,7 @@ class _WalletAction extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 16,
-                color: const Color(0xFF2C7BFE),
+                color: accent,
               ),
             ),
             const SizedBox(height: 2),
@@ -401,7 +405,7 @@ class _WalletAction extends StatelessWidget {
               style: GoogleFonts.poppins(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF2C7BFE),
+                color: accent,
               ),
             ),
           ],
