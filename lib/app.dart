@@ -13,7 +13,7 @@ class EMotorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSession = SessionManager.instance.token != null;
+    final hasSession = SessionManager.instance.token?.isNotEmpty == true;
     return MaterialApp(
       title: 'Gridwiz E-Motor',
       debugShowCheckedModeBanner: false,

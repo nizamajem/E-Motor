@@ -16,9 +16,10 @@ class AppNavigator {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
+        final navigator = Navigator.of(dialogContext);
         Future<void>.delayed(const Duration(seconds: 2), () {
-          if (Navigator.of(dialogContext).canPop()) {
-            Navigator.of(dialogContext).pop();
+          if (navigator.canPop()) {
+            navigator.pop();
           }
         });
         return AlertDialog(

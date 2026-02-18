@@ -34,4 +34,6 @@ class ApiConfig {
   static const String historyByUserPath =
       '/user-cycling-history/all-e-motors/by-user';
   static const String feedbacksPath = '/feedbacks';
+  static String refreshDashboard(String customerId) =>
+      '/emotors/refresh-dashboard/$customerId';
 }

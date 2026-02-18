@@ -9,8 +9,10 @@ class HistoryService {
   final ApiClient _client;
 
   Future<List<HistoryEntry>> fetchHistory() async {
-    if (SessionManager.instance.token == null) return [];
-    final userId = SessionManager.instance.user?.userId ??
+    final token = SessionManager.instance.token;
+    if (token == null || token.isEmpty) return [];
+    final userId =
+        SessionManager.instance.user?.userId ??
         SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
         SessionManager.instance.userProfile?['id']?.toString().trim();
     if (userId == null || userId.isEmpty) return [];
@@ -43,7 +45,8 @@ class HistoryService {
   }
 
   Future<List<HistoryEntry>> fetchHistoryByUser(String userId) async {
-    if (SessionManager.instance.token == null) return [];
+    final token = SessionManager.instance.token;
+    if (token == null || token.isEmpty) return [];
     if (userId.isEmpty) return [];
     Map<String, dynamic> res;
     try {
@@ -69,8 +72,9 @@ class HistoryService {
     return [];
   }
 
-  Stream<List<HistoryEntry>> streamHistory(
-      {Duration interval = const Duration(seconds: 6)}) {
+  Stream<List<HistoryEntry>> streamHistory({
+    Duration interval = const Duration(seconds: 6),
+  }) {
     return Stream.periodic(interval).asyncMap((_) => fetchHistory());
   }
 }

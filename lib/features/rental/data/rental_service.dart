@@ -320,6 +320,7 @@ class RentalService {
       SessionManager.instance.clearRental();
     }
     await SessionManager.instance.saveUser(session);
+    await SessionManager.instance.saveToken(token);
     if (refreshToken.isNotEmpty) {
       await SessionManager.instance.saveRefreshToken(refreshToken);
     }
@@ -497,11 +498,55 @@ class RentalService {
   }
 
   Future<RideStatus> fetchStatus() async {
-    final rideId = SessionManager.instance.rental?.rideHistoryId;
-    if (rideId == null || rideId.isEmpty) {
-      throw ApiException(AppLocalizations.current.noRideId);
+    final rental = SessionManager.instance.rental;
+
+    String? clean(String? v) {
+      if (v == null) return null;
+      final t = v.trim();
+      return t.isEmpty ? null : t;
     }
-    return fetchStatusById(rideId);
+
+    final rideId = clean(rental?.rideHistoryId);
+    final emotorId =
+        clean(rental?.emotorId) ?? clean(SessionManager.instance.emotorId);
+
+    final imei = clean(SessionManager.instance.emotorImei);
+
+    // 🔥 PRIORITY 1 → rideId
+    if (rideId != null) {
+      return fetchStatusById(rideId);
+    }
+
+    // 🔥 PRIORITY 2 → emotorId
+    if (emotorId != null) {
+      debugPrint('fetchStatus → using emotorId=$emotorId');
+
+      final res = await _client.getJson(
+        '${ApiConfig.emotorByIdPath}/$emotorId',
+        auth: true,
+      );
+
+      final payload = res['data'] is Map<String, dynamic> ? res['data'] : res;
+
+      return RideStatus.fromJson(payload);
+    }
+
+    // 🔥 PRIORITY 3 → IMEI
+    if (imei != null) {
+      debugPrint('fetchStatus → using IMEI=$imei');
+
+      final res = await _client.getJson(
+        '${ApiConfig.emotorByIdPath}/imei/$imei',
+        auth: true,
+      );
+
+      final payload = res['data'] is Map<String, dynamic> ? res['data'] : res;
+
+      return RideStatus.fromJson(payload);
+    }
+
+    debugPrint('⛔ fetchStatus aborted → no identifier ready');
+    throw ApiException('No emotor identifier available');
   }
 
   Future<RideStatus> fetchStatusById(String rideId) async {
@@ -517,8 +562,22 @@ class RentalService {
 
   Stream<RideStatus> statusStream({
     Duration interval = const Duration(seconds: 4),
-  }) {
-    return Stream.periodic(interval).asyncMap((_) => fetchStatus());
+  }) async* {
+    while (true) {
+      await Future.delayed(interval);
+
+      final rental = SessionManager.instance.rental;
+      if (rental == null || (rental.rideHistoryId ?? '').trim().isEmpty) {
+        debugPrint('⛔ statusStream stopped → no active ride');
+        break;
+      }
+
+      try {
+        yield await fetchStatus();
+      } catch (e) {
+        debugPrint('⚠️ statusStream error ignored: $e');
+      }
+    }
   }
 
   Future<String> endRental() async {
@@ -539,19 +598,31 @@ class RentalService {
         'Tidak ada rideId, emotorId, atau IMEI untuk diakhiri.',
       );
     }
+    debugPrint('==============================');
+    debugPrint('🔥 END RENTAL API CALL');
+    debugPrint('userId = $userId');
+    debugPrint('rideId = $rideId');
+    debugPrint('emotorId = $emotorId');
+    debugPrint('imei = $emotorImei');
+
+    final body = {
+      'userId': userId,
+      if (emotorImei.isNotEmpty)
+        'imei': emotorImei
+      else if (emotorId.isNotEmpty)
+        'emotorId': emotorId,
+    };
+
+    debugPrint('📤 END RENTAL REQUEST BODY: $body');
+
     final res = await _client.postJson(
       ApiConfig.endRentalPath,
       auth: true,
-      body: {
-        'userId': userId,
-        if (rideId != null && rideId.isNotEmpty)
-          'rideId': rideId
-        else if (emotorImei.isNotEmpty)
-          'imei': emotorImei
-        else
-          'emotorId': emotorId,
-      },
+      body: body,
     );
+
+    debugPrint('📥 END RENTAL RESPONSE: $res');
+
     final ride = res['ride'] is Map<String, dynamic>
         ? res['ride'] as Map<String, dynamic>
         : null;
@@ -599,7 +670,8 @@ class RentalService {
   }
 
   Future<RentalSession?> restoreActiveRental() async {
-    if (SessionManager.instance.token == null) return null;
+    final token = SessionManager.instance.token;
+    if (token == null || token.isEmpty) return null;
     final existing = SessionManager.instance.rental;
 
     final entries = await HistoryService().fetchHistory();
@@ -704,8 +776,10 @@ class RentalService {
       'resolvedEmotorId=$emotorId activeStart=${active?.startDate} activeEnd=${active?.endDate}',
     );
 
+    debugPrint('RESTORE → final emotorId=$emotorId');
+
     final rental = RentalSession(
-      id: active?.id ?? emotorId,
+      id: emotorId,
       emotorId: emotorId,
       plate: active?.plate ?? (assigned?.plate ?? '-'),
       rangeKm: 0,
@@ -718,6 +792,7 @@ class RentalService {
         active?.startDate != null) {
       SessionManager.instance.setRentalStartedAt(active!.startDate);
     }
+
     return rental;
   }
 
@@ -757,4 +832,56 @@ class RentalService {
         : null;
     return ride?['id']?.toString() ?? rideId ?? emotorId;
   }
+
+  Future<DashboardRefresh> refreshDashboard() async {
+    final userId =
+        SessionManager.instance.user?.userId ??
+        SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
+        SessionManager.instance.userProfile?['id']?.toString().trim();
+
+    if (userId == null || userId.isEmpty) {
+      throw ApiException('UserId not found');
+    }
+
+    final res = await _client.getJson(
+      ApiConfig.refreshDashboard(userId),
+      auth: true,
+    );
+
+    final payload = res['data'] is Map<String, dynamic> ? res['data'] : res;
+
+    return DashboardRefresh.fromJson(payload);
+  }
+}
+
+class DashboardRefresh {
+  DashboardRefresh({
+    required this.emotorNumber,
+    required this.packageName,
+    required this.membershipDurationRemaining,
+    required this.membershipValidUntil,
+    required this.emissionReduction,
+    required this.rideRange,
+  });
+
+  factory DashboardRefresh.fromJson(Map<String, dynamic> json) {
+    return DashboardRefresh(
+      emotorNumber: json['emotorNumber']?.toString() ?? '-',
+      packageName: json['packageName']?.toString() ?? '',
+      membershipDurationRemaining:
+          (json['membershipDurationRemaining'] ?? 0) as int,
+      membershipValidUntil: DateTime.tryParse(
+        json['membershipValidUntil'] ?? '',
+      ),
+      emissionReduction: (json['emissionReduction'] ?? 0).toDouble(),
+      rideRange: (json['rideRange'] ?? 0).toDouble(),
+    );
+  }
+
+  final String emotorNumber;
+  final String packageName;
+  final int membershipDurationRemaining;
+  final DateTime? membershipValidUntil;
+  final double emissionReduction;
+  final double rideRange;
 }

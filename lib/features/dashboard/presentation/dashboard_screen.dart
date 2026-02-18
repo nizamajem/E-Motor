@@ -59,21 +59,71 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _listenInternetConnection();
+    _initDashboard();
+  }
 
-    _rental = widget.initialRental ?? SessionManager.instance.rental;
-    _isActive = _rental?.motorOn ?? false;
-    _hasRental = _rental != null;
-    _requireStart = !_hasRental;
-    _elapsedSeconds = 0;
-    final startedAt = SessionManager.instance.rentalStartedAt;
-    if (_hasRental && startedAt != null) {
-      final diff = DateTime.now().difference(startedAt);
-      if (!diff.isNegative) {
-        _elapsedSeconds = diff.inSeconds;
-      }
+  void _debugState(String from) {
+    debugPrint('==============================');
+    debugPrint('STATE CHANGE FROM: $from');
+    debugPrint('_hasRental     = $_hasRental');
+    debugPrint('_requireStart  = $_requireStart');
+    debugPrint('_isActive      = $_isActive');
+    debugPrint('_rental?.rideId= ${_rental?.rideHistoryId}');
+    debugPrint('_status?.ended = ${_status?.isEnded}');
+    debugPrint('==============================');
+  }
+
+  Future<void> _initDashboard() async {
+    await SessionManager.instance.loadFromStorage();
+    if (!mounted) return;
+
+    // ✅ ambil rental dari storage dulu (ini sumber kebenaran ride aktif lokal)
+    final storedRental = widget.initialRental ?? SessionManager.instance.rental;
+
+    setState(() {
+      _rental = storedRental;
+      _hasRental = storedRental != null;
+      _requireStart = false;
+      _isActive = storedRental?.motorOn ?? false; // 🔥 INI PENTING
+    });
+
+    // ✅ refreshDashboard cuma update UI info kalau rental udah ada
+    try {
+      final refresh = await _rentalService.refreshDashboard();
+      if (!mounted) return;
+
+      setState(() {
+        if (_rental != null) {
+          _rental = RentalSession(
+            id: _rental!.id,
+            emotorId: _rental!.emotorId,
+            plate: refresh.emotorNumber,
+            rangeKm: refresh.rideRange,
+            batteryPercent: _rental!.batteryPercent,
+            motorOn: _rental!.motorOn,
+            rideHistoryId: _rental!.rideHistoryId,
+          );
+          SessionManager.instance.saveRental(_rental!);
+        }
+        // ❗ jangan ubah _hasRental di sini
+      });
+    } catch (e) {
+      debugPrint('Refresh dashboard failed: $e');
     }
-    _ensureTimer();
-    _bootstrapRental();
+
+    // ✅ status hanya boleh dipanggil kalau rideHistoryId ada
+    if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
+      await _refreshStatusOnce();
+    }
+
+    if (_rental == null) {
+      setState(() {
+        _hasRental = false;
+        _requireStart = true;
+      });
+    }
+
+    await _bootstrapRental();
   }
 
   @override
@@ -126,19 +176,60 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _bootstrapRental() async {
+    final rideId = _rental?.rideHistoryId ?? '';
+
+    if (rideId.isNotEmpty) {
+      try {
+        final status = await _rentalService.fetchStatusById(rideId);
+        if (!mounted) return;
+        setState(() => _isActive = status.motorOn);
+      } on ApiException catch (e) {
+        if (e.statusCode == 404 || e.statusCode == 410) {
+          debugPrint('⚠️ bootstrapRental 404 ignored');
+          // ❗ jangan clear rental
+        } else if (e.statusCode == 401 || e.statusCode == 403) {
+          _handleAuthExpired();
+        }
+      } catch (_) {}
+    }
+
     if (_hasRental) {
+      if (rideId.isNotEmpty) {
+        await _refreshStatusOnce();
+        if (!mounted) return;
+      }
+
       await _verifyRentalActive();
       if (!mounted) return;
+
       if (_hasRental) {
-        if ((_rental?.rideHistoryId ?? '').isNotEmpty) {
-          _refreshStatusOnce();
+        if (rideId.isNotEmpty) {
           _startStatusListener();
         }
         _syncStartRentalTime();
         return;
       }
     }
+
     await _restoreActiveRentalIfNeeded();
+
+    final emotorId =
+        _rental?.emotorId ?? SessionManager.instance.emotorId ?? '';
+
+    if (_hasRental && rideId.isEmpty && emotorId.isEmpty) {
+      debugPrint('⛔ Rental invalid → clearing local state');
+
+      SessionManager.instance.clearRental();
+
+      setState(() {
+        _rental = null;
+        _hasRental = false;
+        _requireStart = true;
+        _isActive = false;
+      });
+
+      return;
+    }
   }
 
   void _syncStartRentalTime() {
@@ -150,18 +241,35 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _fetchAssignedAndSyncStartTime() async {
-    final userId = SessionManager.instance.user?.userId ??
+    final userId =
+        SessionManager.instance.user?.userId ??
         SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
         SessionManager.instance.userProfile?['id']?.toString().trim();
     if (userId == null || userId.isEmpty) return;
+
     try {
       final assigned = await EmotorService().fetchAssignedToUser(userId);
       if (!mounted || assigned?.createTime == null) return;
-      SessionManager.instance.setRentalStartedAt(assigned!.createTime);
-      if (mounted) {
-        setState(() {
-          _elapsedSeconds = 0;
-        });
+
+      final existing = SessionManager.instance.rentalStartedAt;
+
+      // ❗ Hanya set kalau belum ada
+      if (existing == null) {
+        final createTime = assigned?.createTime;
+        if (createTime == null) return;
+
+        final existing = SessionManager.instance.rentalStartedAt;
+
+        if (existing == null) {
+          SessionManager.instance.setRentalStartedAt(createTime);
+
+          final diff = DateTime.now().difference(createTime);
+          if (!diff.isNegative) {
+            setState(() {
+              _elapsedSeconds = diff.inSeconds;
+            });
+          }
+        }
       }
     } catch (_) {}
   }
@@ -172,14 +280,25 @@ class _DashboardScreenState extends State<DashboardScreen>
       await _verifyAssignedEmotorStatus();
       return;
     }
+
     try {
       final history = await HistoryService().fetchHistoryById(rideId);
       if (!mounted) return;
-      final entry = history.isNotEmpty ? history.first : null;
-      final isActive = entry is HistoryEntry && entry.isActive;
-      if (!isActive) {
+
+      if (history.isEmpty) {
+        debugPrint('⚠️ history empty ignored');
+        return; // ❗ JANGAN CLEAR
+      }
+
+      final entry = history.first;
+      final isActive = entry.isActive;
+
+      if (!isActive &&
+          !(_status?.motorOn ?? false) &&
+          (_rental?.rideHistoryId ?? '').isNotEmpty) {
         _statusSub?.cancel();
         _timer?.cancel();
+
         setState(() {
           _status = null;
           _rental = null;
@@ -188,28 +307,37 @@ class _DashboardScreenState extends State<DashboardScreen>
           _isActive = false;
           _elapsedSeconds = 0;
         });
+
+        _debugState('_verifyRentalActive CLEAR');
+
         SessionManager.instance.clearRental();
         SessionManager.instance.setRentalStartedAt(null);
       }
-    } catch (_) {}
+    } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 410) {
+        debugPrint('⚠️ verifyRentalActive 404 ignored');
+        return; // ❗ JANGAN CLEAR
+      }
+      rethrow;
+    }
   }
 
   Future<void> _verifyAssignedEmotorStatus() async {
     try {
-      final userId = SessionManager.instance.user?.userId ??
+      final userId =
+          SessionManager.instance.user?.userId ??
           SessionManager.instance.userProfile?['id_user']?.toString().trim() ??
           SessionManager.instance.userProfile?['id']?.toString().trim();
       if (userId == null || userId.isEmpty) return;
       final assigned = await EmotorService().fetchAssignedToUser(userId);
       if (!mounted) return;
       if (assigned == null) return;
-      if (!assigned.isInUse) {
-        if ((_rental?.rideHistoryId ?? '').isEmpty &&
-            SessionManager.instance.rentalStartedAt != null) {
-          return;
-        }
+      if (!assigned.isInUse &&
+          !(_status?.motorOn ?? false) &&
+          (_rental?.rideHistoryId ?? '').isNotEmpty) {
         _statusSub?.cancel();
         _timer?.cancel();
+
         setState(() {
           _status = null;
           _rental = null;
@@ -218,6 +346,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           _isActive = false;
           _elapsedSeconds = 0;
         });
+
+        _debugState('_verifyAssignedEmotorStatus CLEAR');
+
         SessionManager.instance.clearRental();
         SessionManager.instance.setRentalStartedAt(null);
       }
@@ -226,7 +357,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Future<void> _restoreActiveRentalIfNeeded() async {
     if (!mounted || _hasRental) return;
-    if (SessionManager.instance.token == null) return;
+    final token = SessionManager.instance.token;
+    if (token == null || token.isEmpty) return;
     final restored = await _rentalService.restoreActiveRental();
     if (!mounted || restored == null) return;
     setState(() {
@@ -269,42 +401,82 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _startStatusListener() {
+    if (_statusSub != null) return;
     if (SessionManager.instance.token == null) return;
-    _statusSub = _rentalService.statusStream().listen((data) {
-      if (!mounted) return;
-      if (data.isEnded && _shouldAcceptRemoteEnd(data)) {
-        _handleRemoteEnd();
-        return;
-      }
-      setState(() {
-        _status = data;
-        if (data.hasMotorState) {
-          _isActive = data.motorOn;
+
+    // 🔥 JANGAN start stream kalau tidak ada ride
+    if ((_rental?.rideHistoryId ?? '').isEmpty) {
+      debugPrint('⛔ statusStream not started → no rideId');
+      return;
+    }
+
+    _statusSub = _rentalService.statusStream().listen(
+      (data) {
+        if (!mounted) return;
+        if (data.isEnded && _shouldAcceptRemoteEnd(data)) {
+          _handleRemoteEnd();
+          return;
         }
-        _hasRental = true;
-        if (data.rideSeconds > 0 && _shouldSyncElapsed(data.rideSeconds)) {
-          _elapsedSeconds = data.rideSeconds;
+        setState(() {
+          _status = data;
+          if (data.hasMotorState) {
+            _isActive = data.motorOn;
+          }
+          _hasRental = true;
+          if (data.rideSeconds > 0 && _shouldSyncElapsed(data.rideSeconds)) {
+            _elapsedSeconds = data.rideSeconds;
+          }
+        });
+        if (_hasRental) {
+          _ensureTimer();
         }
-      });
-      if (_hasRental) {
-        _ensureTimer();
-      }
-    }, onError: (error) {
-      if (!mounted) return;
-      if (error is ApiException &&
-          (error.statusCode == 404 || error.statusCode == 410)) {
-        _handleRemoteEnd();
-      } else if (error is ApiException &&
-          (error.statusCode == 401 || error.statusCode == 403)) {
-        _handleAuthExpired();
-      }
-    });
+      },
+      onError: (error) {
+        if (!mounted) return;
+
+        if (error is ApiException &&
+            (error.statusCode == 404 || error.statusCode == 410)) {
+          debugPrint('⚠️ Stream 404 ignored');
+          return; // ❗ jangan handleRemoteEnd
+        } else if (error is ApiException &&
+            (error.statusCode == 401 || error.statusCode == 403)) {
+          _handleAuthExpired();
+        }
+      },
+    );
   }
 
   Future<void> _refreshStatusOnce() async {
+    final rental = SessionManager.instance.rental;
+
+    String? clean(String? v) {
+      if (v == null) return null;
+      final t = v.trim();
+      return t.isEmpty ? null : t;
+    }
+
+    final rideId = clean(rental?.rideHistoryId);
+    final emotorId =
+        clean(rental?.emotorId) ?? clean(SessionManager.instance.emotorId);
+    final imei = clean(SessionManager.instance.emotorImei);
+
+    if (rideId == null && emotorId == null && imei == null) {
+      debugPrint('⛔ Skip fetchStatus → no identifier ready');
+      return;
+    }
+
     if (SessionManager.instance.token == null) return;
+
     try {
-      final data = await _rentalService.fetchStatus();
+      RideStatus data;
+
+      try {
+        data = await _rentalService.fetchStatus();
+      } on ApiException catch (e) {
+        debugPrint('⛔ fetchStatus failed: $e');
+        return; // STOP di sini
+      }
+
       if (!mounted) return;
       if (data.isEnded && _shouldAcceptRemoteEnd(data)) {
         _handleRemoteEnd();
@@ -333,8 +505,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+
       if (e.statusCode == 404 || e.statusCode == 410) {
-        _handleRemoteEnd();
+        debugPrint('⚠️ Status 404 ignored (not forcing remote end)');
+        return; // ❗ JANGAN clear rental
       } else if (e.statusCode == 401 || e.statusCode == 403) {
         _handleAuthExpired();
       }
@@ -353,6 +527,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       _isActive = false;
       _elapsedSeconds = 0;
     });
+    _debugState('_handleRemoteEnd');
+
     SessionManager.instance.clearRental();
     SessionManager.instance.setRentalStartedAt(null);
     _showSnack(AppLocalizations.of(context).rentalEndedRemote);
@@ -367,6 +543,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _handleAuthExpired() async {
+    if (SessionManager.instance.refreshToken != null) {
+      try {
+        await ApiClient().refreshAccessToken();
+        _authExpiredHandled = false;
+        return;
+      } catch (_) {}
+    }
+
     if (!mounted || _authExpiredHandled) return;
     _authExpiredHandled = true;
     _statusSub?.cancel();
@@ -531,6 +715,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       emotorName,
     ], emotorFallback);
     final rentalStartedAt = SessionManager.instance.rentalStartedAt;
+    debugPrint('BUILD -> requireStart=$_requireStart hasRental=$_hasRental');
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -1040,6 +1226,16 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _handleEndRental() async {
+    debugPrint('==============================');
+    debugPrint('🚨 END RENTAL BUTTON PRESSED');
+    debugPrint('_isActive = $_isActive');
+    debugPrint('_hasRental = $_hasRental');
+    debugPrint('rideHistoryId = ${_rental?.rideHistoryId}');
+    debugPrint('rental.emotorId = ${_rental?.emotorId}');
+    debugPrint('session.emotorId = ${SessionManager.instance.emotorId}');
+    debugPrint('session.imei = ${SessionManager.instance.emotorImei}');
+    debugPrint('==============================');
+
     final l10n = AppLocalizations.of(context);
     if (_isEnding) return;
 
@@ -1094,6 +1290,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           _elapsedSeconds = 0;
           _isActive = false;
         });
+        _debugState('_handleEndRental CLEAR');
+
         SessionManager.instance.clearRental();
         SessionManager.instance.setRentalStartedAt(null);
         _showSnack(l10n.errorHistoryNotFound);
@@ -1134,6 +1332,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         appRoute(DetailHistoryScreen(item: item, returnToDashboard: true)),
       );
     } on ApiException catch (e) {
+      debugPrint('❌ END RENTAL ERROR');
+      debugPrint('statusCode = ${e.statusCode}');
+      debugPrint('message = ${e.message}');
       if (!mounted) return;
       hideLoadingDialog(context);
       if (e.statusCode == 401 || e.statusCode == 403) {

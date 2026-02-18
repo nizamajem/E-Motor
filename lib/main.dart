@@ -6,7 +6,13 @@ import 'core/session/session_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await SessionManager.instance.loadFromStorage();
-  // await ApiClient().refreshAccessToken();
+
+  if (SessionManager.instance.refreshToken != null &&
+      SessionManager.instance.refreshToken!.isNotEmpty) {
+    await ApiClient().refreshAccessToken();
+  }
+
   runApp(const EMotorApp());
 }

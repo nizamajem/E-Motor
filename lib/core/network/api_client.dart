@@ -111,13 +111,23 @@ class ApiClient {
   bool _shouldRetryWithRefresh(http.Response response) {
     final status = response.statusCode;
     if (status != 401) return false;
+    if (SessionManager.instance.refreshToken?.isNotEmpty != true) return false;
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
-        return decoded['code']?.toString() == 'ACCESS_TOKEN_EXPIRED';
+        final code = decoded['code']?.toString().toUpperCase();
+        if (code == null || code.isEmpty) {
+          return true;
+        }
+        return code == 'TOKEN_EXPIRED' ||
+            code == 'ACCESS_TOKEN_EXPIRED' ||
+            code == 'SESSION_EXPIRED' ||
+            code == 'TOKEN_INVALID' ||
+            code == 'INVALID_TOKEN' ||
+            code == 'JWT_EXPIRED';
       }
     } catch (_) {}
-    return false;
+    return true;
   }
 
   Future<bool> _refreshToken() async {
@@ -171,13 +181,23 @@ class ApiClient {
       }
 
       final decoded = jsonDecode(response.body);
-      final newAccessToken = decoded['access_token']?.toString() ?? '';
+      if (decoded is! Map<String, dynamic>) return false;
+      final payload = decoded['data'] is Map<String, dynamic>
+          ? decoded['data']
+          : decoded;
+      final newAccessToken =
+          payload['access_token']?.toString() ??
+          payload['token']?.toString() ??
+          payload['accessToken']?.toString() ??
+          '';
 
-      final newRefreshToken = decoded['refresh_token']?.toString() ?? '';
-
-      debugPrint("Refresh failed because status=${response.statusCode}");
-
-      debugPrint("Body=${response.body}");
+      final newRefreshToken = payload['refresh_token']?.toString() ?? '';
+      if (newAccessToken.isEmpty) {
+        if (_debugAuth) {
+          debugPrint('❌ REFRESH FAILED (no access token in response)');
+        }
+        return false;
+      }
 
       if (newRefreshToken.isNotEmpty) {
         await SessionManager.instance.saveRefreshToken(newRefreshToken);

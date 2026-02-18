@@ -30,7 +30,8 @@ class RentalSession {
   });
 
   factory RentalSession.fromJson(Map<String, dynamic> json) {
-    final rideId = json['rideHistoryId']?.toString() ??
+    final rideId =
+        json['rideHistoryId']?.toString() ??
         json['ride_history_id']?.toString() ??
         json['ride_id']?.toString() ??
         json['rideId']?.toString() ??
@@ -38,14 +39,19 @@ class RentalSession {
         '';
     return RentalSession(
       id: json['id']?.toString() ?? rideId,
-      emotorId: json['emotorId']?.toString() ??
+      emotorId:
+          json['emotorId']?.toString() ??
           json['eMotorId']?.toString() ??
           json['bikeId']?.toString() ??
           json['emotor_id']?.toString() ??
           '',
-      plate: json['plate']?.toString() ?? json['vehicle_number']?.toString() ?? '-',
+      plate:
+          json['plate']?.toString() ??
+          json['vehicle_number']?.toString() ??
+          '-',
       rangeKm: (json['range_km'] ?? json['range'] ?? 0).toDouble(),
-      batteryPercent: (json['battery'] ?? json['battery_percent'] ?? 0).toDouble(),
+      batteryPercent: (json['battery'] ?? json['battery_percent'] ?? 0)
+          .toDouble(),
       motorOn: json['motor_on'] == true || json['motorOn'] == true,
       rideHistoryId: rideId.isEmpty ? null : rideId,
     );
@@ -114,13 +120,6 @@ class SessionManager {
         email: prefs.getString(_keyEmail) ?? '',
         userId: secureUserId,
       );
-    } else if (secureUserId != null && secureUserId.isNotEmpty) {
-      _user = UserSession(
-        token: '',
-        name: prefs.getString(_keyName) ?? '',
-        email: prefs.getString(_keyEmail) ?? '',
-        userId: secureUserId,
-      );
     } else {
       _user = null;
     }
@@ -150,8 +149,10 @@ class SessionManager {
         _emotorId = id;
       }
     }
-    if ((_emotorImei == null || _emotorImei!.isEmpty) && _emotorProfile != null) {
-      final imei = _emotorProfile?['IMEI']?.toString().trim() ??
+    if ((_emotorImei == null || _emotorImei!.isEmpty) &&
+        _emotorProfile != null) {
+      final imei =
+          _emotorProfile?['IMEI']?.toString().trim() ??
           _emotorProfile?['imei']?.toString().trim();
       if (imei != null && imei.isNotEmpty) {
         _emotorImei = imei;
@@ -170,7 +171,8 @@ class SessionManager {
       final emotor = _userProfile?['emotor'];
       if (emotor is Map<String, dynamic>) {
         final imei =
-            emotor['IMEI']?.toString().trim() ?? emotor['imei']?.toString().trim();
+            emotor['IMEI']?.toString().trim() ??
+            emotor['imei']?.toString().trim();
         if (imei != null && imei.isNotEmpty) {
           _emotorImei = imei;
         }
@@ -187,10 +189,7 @@ class SessionManager {
     await prefs.setString(_keyEmail, session.email);
     if (session.userId != null && session.userId!.isNotEmpty) {
       await prefs.setString(_keyUserId, session.userId!);
-      await _secureStorage.write(
-        key: _secureKeyUserId,
-        value: session.userId!,
-      );
+      await _secureStorage.write(key: _secureKeyUserId, value: session.userId!);
     } else {
       await prefs.remove(_keyUserId);
     }
@@ -256,7 +255,9 @@ class SessionManager {
     final emotor = profile?['emotor'];
     if (emotor is Map<String, dynamic>) {
       final id = emotor['id']?.toString().trim();
-      final imei = emotor['IMEI']?.toString().trim() ?? emotor['imei']?.toString().trim();
+      final imei =
+          emotor['IMEI']?.toString().trim() ??
+          emotor['imei']?.toString().trim();
       if (id != null && id.isNotEmpty) {
         await saveEmotorId(id);
       }
@@ -271,7 +272,9 @@ class SessionManager {
     final prefs = await SharedPreferences.getInstance();
     await _saveMap(prefs, _keyEmotorJson, profile);
     final id = profile?['id']?.toString().trim();
-    final imei = profile?['IMEI']?.toString().trim() ?? profile?['imei']?.toString().trim();
+    final imei =
+        profile?['IMEI']?.toString().trim() ??
+        profile?['imei']?.toString().trim();
     if (id != null && id.isNotEmpty) {
       await saveEmotorId(id);
     }
