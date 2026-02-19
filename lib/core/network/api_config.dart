@@ -4,10 +4,7 @@ class ApiConfig {
   /// Base URL to hit backend services.
   /// Override at build time with --dart-define API_BASE_URL=https://your-api
   static String get baseUrl {
-    const fromEnv = String.fromEnvironment(
-      'API_BASE_URL',
-      defaultValue: '',
-    );
+    const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (fromEnv.isNotEmpty) return fromEnv;
     if (!dotenv.isInitialized) {
       return 'https://reflowapp.ptms3.com/api';
@@ -63,17 +60,17 @@ class ApiConfig {
   static String get midtransClientKey {
     const fromEnv = String.fromEnvironment(
       'MIDTRANS_CLIENT_KEY',
-      defaultValue: '',
+      defaultValue: 'Mid-client-nj5lIkVyYbr3xlQO',
     );
     if (fromEnv.isNotEmpty) return fromEnv;
-    if (!dotenv.isInitialized) return '';
-    return dotenv.env['MIDTRANS_CLIENT_KEY'] ?? '';
+    if (!dotenv.isInitialized) return 'Mid-client-nj5lIkVyYbr3xlQO';
+    return dotenv.env['MIDTRANS_CLIENT_KEY'] ?? 'Mid-client-nj5lIkVyYbr3xlQO';
   }
 
   static String get midtransMerchantBaseUrl {
     const fromEnv = String.fromEnvironment(
       'MIDTRANS_MERCHANT_BASE_URL',
-      defaultValue: '',
+      defaultValue: 'https://reflowapp.ptms3.com/api',
     );
     if (fromEnv.isNotEmpty) return fromEnv;
     if (!dotenv.isInitialized) return baseUrl;

@@ -17,7 +17,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+10
+version: 1.0.6+1
 
 environment:
   sdk: ^3.9.2
@@ -31,7 +31,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_dotenv: ^5.1.0
   flutter_localizations:
     sdk: flutter
 
@@ -43,9 +42,10 @@ dependencies:
   shared_preferences: ^2.3.2
   connectivity_plus: ^7.0.0
   flutter_secure_storage: ^9.2.2
-  image_picker: ^1.1.2
-  midtrans_sdk: ^1.2.0
-  url_launcher: ^6.2.6
+  flutter_dotenv: ^5.1.0
+  url_launcher: ^6.2.5
+  midtrans_sdk: ^1.0.2
+  image_picker: ^1.0.7
   http_parser: ^4.0.2
 
 dev_dependencies:
@@ -72,20 +72,16 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
     - assets/images/onboard-ride.png
     - assets/images/onboard-smart.png
     - assets/images/onboard-unlock.png
     - assets/images/dashboard.png
-    - assets/images/logo_new.png
-    - assets/images/buy.png
-    - assets/images/icon-park-solid_success.png
-    - assets/images/failed.png
-    - assets/images/payment/
     
 flutter_launcher_icons:
+  generate: true
   android: "launcher_icon"
   ios: true
+  remove_alpha_ios: true
   image_path: "assets/images/logo_new.png"
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/logo_new.png"
