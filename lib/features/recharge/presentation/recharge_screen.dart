@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/localization/app_localizations.dart';
+import '../../../components/app_motion.dart';
+import '../../../core/session/session_manager.dart';
+import '../../../core/network/api_config.dart';
+import '../data/topup_service.dart';
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({super.key});
 
@@ -20,6 +26,22 @@ class _RechargeScreenState extends State<RechargeScreen> {
   ];
 
   int _selectedIndex = 0;
+  bool _isSubmitting = false;
+  final TopupService _topupService = TopupService();
+  MidtransSDK? _midtrans;
+  bool _midtransReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initMidtrans();
+  }
+
+  @override
+  void dispose() {
+    _midtrans?.removeTransactionFinishedCallback();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +143,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
                 width: double.infinity,
                 height: 46,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: _isSubmitting ? null : _handleTopup,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2C7BFE),
                     foregroundColor: Colors.white,
@@ -130,13 +152,23 @@ class _RechargeScreenState extends State<RechargeScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
-                    l10n.continueLabel,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          l10n.continueLabel,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -144,6 +176,112 @@ class _RechargeScreenState extends State<RechargeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleTopup() async {
+    if (_isSubmitting) return;
+    final l10n = AppLocalizations.of(context);
+    final walletId = SessionManager.instance.customerWalletId ?? '';
+    if (walletId.isEmpty) {
+      _showSnack(l10n.topupWalletMissing);
+      return;
+    }
+    final selected = _options[_selectedIndex];
+    setState(() => _isSubmitting = true);
+    try {
+      final res = await _topupService.createSnap(
+        customerWalletId: walletId,
+        amount: selected.amount,
+        isSandbox: false,
+      );
+      if (!mounted) return;
+      if (res == null || res.snapToken.isEmpty) {
+        _showSnack(l10n.topupFailed);
+        return;
+      }
+      if (!_midtransReady || _midtrans == null) {
+        await _initMidtrans();
+      }
+      if (!_midtransReady || _midtrans == null) {
+        _showSnack(l10n.topupFailed);
+        return;
+      }
+      await _midtrans!.startPaymentUiFlow(token: res.snapToken);
+      if (mounted) _showSnack(l10n.topupRedirected);
+    } catch (_) {
+      if (mounted) _showSnack(l10n.topupFailed);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  void _showSnack(String message) {
+    showAppSnackBar(context, message);
+  }
+
+  Future<void> _initMidtrans() async {
+    final merchantUrl = _normalizeMerchantUrl(ApiConfig.midtransMerchantBaseUrl);
+    if (ApiConfig.midtransClientKey.isEmpty || merchantUrl.isEmpty) {
+      return;
+    }
+    try {
+      if (kDebugMode) {
+        debugPrint('midtrans init clientKeyLen=${ApiConfig.midtransClientKey.length}');
+        debugPrint('midtrans merchantUrl=$merchantUrl');
+      }
+      final midtrans = await MidtransSDK.init(
+        config: MidtransConfig(
+          clientKey: ApiConfig.midtransClientKey,
+          merchantBaseUrl: merchantUrl,
+          enableLog: kDebugMode,
+          colorTheme: ColorTheme(
+            colorPrimary: const Color(0xFF2C7BFE),
+            colorPrimaryDark: const Color(0xFF2C7BFE),
+            colorSecondary: const Color(0xFF2C7BFE),
+          ),
+        ),
+      );
+      midtrans.setTransactionFinishedCallback(_handleMidtransResult);
+      if (mounted) {
+        setState(() {
+          _midtrans = midtrans;
+          _midtransReady = true;
+        });
+      } else {
+        _midtrans = midtrans;
+        _midtransReady = true;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _midtransReady = false);
+      }
+    }
+  }
+
+  String _normalizeMerchantUrl(String value) {
+    var url = value.trim();
+    if (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (url.endsWith('/api')) {
+      url = url.substring(0, url.length - 4);
+    }
+    return url;
+  }
+
+  void _handleMidtransResult(TransactionResult result) {
+    final status = result.status.toLowerCase();
+    if (status == 'success' || status == 'settlement' || status == 'capture') {
+      _showSnack(AppLocalizations.of(context).paymentSuccess);
+      return;
+    }
+    if (status == 'pending') {
+      _showSnack(AppLocalizations.of(context).paymentPendingBody);
+      return;
+    }
+    _showSnack(AppLocalizations.of(context).paymentFailed);
   }
 
   String _formatRupiah(int value) {
