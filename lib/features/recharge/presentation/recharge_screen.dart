@@ -8,6 +8,7 @@ import '../../../components/app_motion.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
 import '../data/topup_service.dart';
+import '../../profile/data/user_service.dart';
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({super.key});
 
@@ -28,6 +29,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
   int _selectedIndex = 0;
   bool _isSubmitting = false;
   final TopupService _topupService = TopupService();
+  final UserService _userService = UserService();
   MidtransSDK? _midtrans;
   bool _midtransReady = false;
 
@@ -81,6 +83,11 @@ class _RechargeScreenState extends State<RechargeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 child: Column(
                   children: [
+                    _PendingTopupCard(
+                      onRetry: _retryPendingTopup,
+                      onCancel: _clearPendingTopup,
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       l10n.rechargePrompt,
                       style: GoogleFonts.poppins(
@@ -181,14 +188,18 @@ class _RechargeScreenState extends State<RechargeScreen> {
   Future<void> _handleTopup() async {
     if (_isSubmitting) return;
     final l10n = AppLocalizations.of(context);
-    final walletId = SessionManager.instance.customerWalletId ?? '';
+    var walletId = SessionManager.instance.customerWalletId ?? '';
     if (walletId.isEmpty) {
-      _showSnack(l10n.topupWalletMissing);
-      return;
+      walletId = await _ensureWalletId();
+      if (walletId.isEmpty) {
+        _showMidtransNotReadyDialog(message: l10n.topupWalletMissing);
+        return;
+      }
     }
     final selected = _options[_selectedIndex];
     setState(() => _isSubmitting = true);
     try {
+      await SessionManager.instance.clearPendingTopup();
       final res = await _topupService.createSnap(
         customerWalletId: walletId,
         amount: selected.amount,
@@ -203,13 +214,22 @@ class _RechargeScreenState extends State<RechargeScreen> {
         await _initMidtrans();
       }
       if (!_midtransReady || _midtrans == null) {
-        _showSnack(l10n.topupFailed);
+        _showMidtransNotReadyDialog();
         return;
       }
+      await SessionManager.instance.savePendingTopup(
+        snapToken: res.snapToken,
+        orderId: res.orderId,
+      );
       await _midtrans!.startPaymentUiFlow(token: res.snapToken);
       if (mounted) _showSnack(l10n.topupRedirected);
-    } catch (_) {
-      if (mounted) _showSnack(l10n.topupFailed);
+    } catch (e) {
+      if (mounted) {
+        final msg = e.toString().replaceAll('Exception:', '').trim();
+        _showMidtransNotReadyDialog(
+          message: msg.isEmpty ? l10n.topupFailed : msg,
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -219,6 +239,102 @@ class _RechargeScreenState extends State<RechargeScreen> {
 
   void _showSnack(String message) {
     showAppSnackBar(context, message);
+  }
+
+  Future<void> _showMidtransNotReadyDialog({String? message}) async {
+    final l10n = AppLocalizations.of(context);
+    return showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.paymentFailed,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message ?? l10n.midtransNotReady,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7B8190),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.ok,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String> _ensureWalletId() async {
+    try {
+      final userId = await SessionManager.instance.resolveUserId();
+      if (userId.isEmpty) return '';
+      final profile = await _userService.fetchUserById(userId);
+      if (profile != null) {
+        await SessionManager.instance.saveUserProfile(profile);
+        if (mounted) setState(() {});
+      }
+    } catch (_) {}
+    return SessionManager.instance.customerWalletId ?? '';
   }
 
   Future<void> _initMidtrans() async {
@@ -274,6 +390,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
   void _handleMidtransResult(TransactionResult result) {
     final status = result.status.toLowerCase();
     if (status == 'success' || status == 'settlement' || status == 'capture') {
+      SessionManager.instance.clearPendingTopup();
+      _refreshBalance();
       _showSnack(AppLocalizations.of(context).paymentSuccess);
       return;
     }
@@ -282,6 +400,36 @@ class _RechargeScreenState extends State<RechargeScreen> {
       return;
     }
     _showSnack(AppLocalizations.of(context).paymentFailed);
+  }
+
+  Future<void> _refreshBalance() async {
+    try {
+      final userId = await SessionManager.instance.resolveUserId();
+      if (userId.isEmpty) return;
+      final profile = await _userService.fetchUserById(userId);
+      if (profile != null) {
+        await SessionManager.instance.saveUserProfile(profile);
+        if (mounted) setState(() {});
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _retryPendingTopup() async {
+    final token = SessionManager.instance.pendingTopupSnapToken ?? '';
+    if (token.isEmpty) return;
+    if (!_midtransReady || _midtrans == null) {
+      await _initMidtrans();
+    }
+    if (!_midtransReady || _midtrans == null) {
+      _showMidtransNotReadyDialog();
+      return;
+    }
+    await _midtrans!.startPaymentUiFlow(token: token);
+  }
+
+  Future<void> _clearPendingTopup() async {
+    await SessionManager.instance.clearPendingTopup();
+    if (mounted) setState(() {});
   }
 
   String _formatRupiah(int value) {
@@ -387,5 +535,101 @@ class _RechargeOptionCard extends StatelessWidget {
       }
     }
     return 'Rp ${buffer.toString()},00';
+  }
+}
+
+class _PendingTopupCard extends StatelessWidget {
+  const _PendingTopupCard({
+    required this.onRetry,
+    required this.onCancel,
+  });
+
+  final VoidCallback onRetry;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final token = SessionManager.instance.pendingTopupSnapToken ?? '';
+    if (token.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F9FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.paymentPending,
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1E3A8A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.paymentPendingBody,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF4B5563),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onCancel,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    l10n.cancel,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF374151),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onRetry,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C7BFE),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    l10n.pay,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

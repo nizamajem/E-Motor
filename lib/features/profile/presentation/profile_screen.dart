@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../dashboard/presentation/dashboard_screen.dart';
-import '../../history/presentation/history_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../membership/presentation/membership_screen.dart';
 import '../../recharge/presentation/recharge_screen.dart';
 import '../../profile/presentation/document_screen.dart';
 import '../../profile/data/user_service.dart';
 import '../../../core/navigation/app_route.dart';
-import '../../../components/bottom_nav.dart';
 import '../../../components/active_rental_logout_dialog.dart';
 import '../../../components/logout_dialog.dart';
 import '../../../components/app_motion.dart';
@@ -23,14 +20,29 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with WidgetsBindingObserver {
   final UserService _userService = UserService();
   bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshProfile();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshProfile();
+    }
   }
 
   Future<void> _refreshProfile() async {
@@ -225,22 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-                AppBottomNavBar(
-                  activeTab: BottomNavTab.profile,
-                  onHistoryTap: () {
-                    Navigator.of(context).pushReplacement(
-                      appRoute(const HistoryScreen(),
-                          direction: AxisDirection.right),
-                    );
-                  },
-                  onDashboardTap: () {
-                    Navigator.of(context).pushReplacement(
-                      appRoute(const DashboardScreen(),
-                          direction: AxisDirection.right),
-                    );
-                  },
-                  onProfileTap: () {},
-                ),
+                const SizedBox.shrink(),
               ],
             ),
           ],

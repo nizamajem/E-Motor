@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../dashboard/presentation/dashboard_screen.dart';
-import '../../profile/presentation/profile_screen.dart';
 import 'detail_history_screen.dart';
 import '../../payment/presentation/payment_screen.dart';
-import '../../../components/bottom_nav.dart';
 import '../../../components/list_ui.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
@@ -154,21 +151,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             ),
-            AppBottomNavBar(
-              activeTab: BottomNavTab.history,
-              onDashboardTap: () {
-                Navigator.of(context).pushReplacement(
-                  appRoute(const DashboardScreen(),
-                      direction: AxisDirection.right),
-                );
-              },
-              onProfileTap: () {
-                Navigator.of(context).pushReplacement(
-                  appRoute(const ProfileScreen(),
-                      direction: AxisDirection.left),
-                );
-              },
-            ),
+            const SizedBox.shrink(),
           ],
         ),
       ),
@@ -764,6 +747,21 @@ class _MembershipHistoryCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (onTap != null && !isPending)
+                Text(
+                  l10n.viewRides,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF2C7BFE),
+                  ),
+                ),
+              if (onTap != null && !isPending)
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: Color(0xFFB4BAC6),
+                ),
               if (onPay != null && isPending)
                 SizedBox(
                   height: 34,
@@ -786,22 +784,6 @@ class _MembershipHistoryCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-              if (onPay != null && isPending) const SizedBox(width: 8),
-              if (onTap != null)
-                Text(
-                  l10n.viewRides,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF2C7BFE),
-                  ),
-                ),
-              if (onTap != null)
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: Color(0xFFB4BAC6),
                 ),
             ],
           ),

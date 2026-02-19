@@ -91,6 +91,8 @@ class SessionManager {
       'session_dashboard_remaining_updated_at';
   static const _keyPendingSnapTokens = 'session_pending_snap_tokens';
   static const _keyPendingRedirectUrls = 'session_pending_redirect_urls';
+  static const _keyPendingTopupSnapToken = 'session_pending_topup_snap_token';
+  static const _keyPendingTopupOrderId = 'session_pending_topup_order_id';
   static const _keyRentalJson = 'session_rental_json';
   static const _keyRentalStartedAt = 'session_rental_started_at';
   static const _keyHasActivePackage = 'session_has_active_package';
@@ -121,6 +123,8 @@ class SessionManager {
   int? _dashboardRideRange;
   Map<String, String> _pendingSnapTokens = {};
   Map<String, String> _pendingRedirectUrls = {};
+  String? _pendingTopupSnapToken;
+  String? _pendingTopupOrderId;
   bool _hasActivePackage = false;
   bool _onboardingSeen = false;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
@@ -177,6 +181,8 @@ class SessionManager {
       _pendingSnapTokens[membershipHistoryId];
   String? getPendingRedirectUrl(String membershipHistoryId) =>
       _pendingRedirectUrls[membershipHistoryId];
+  String? get pendingTopupSnapToken => _pendingTopupSnapToken;
+  String? get pendingTopupOrderId => _pendingTopupOrderId;
   bool get hasActivePackage => _hasActivePackage;
   bool get onboardingSeen => _onboardingSeen;
 
@@ -280,6 +286,8 @@ class SessionManager {
         );
       }
     }
+    _pendingTopupSnapToken = prefs.getString(_keyPendingTopupSnapToken);
+    _pendingTopupOrderId = prefs.getString(_keyPendingTopupOrderId);
     // Do not persist membership state locally; infer from latest profile only.
     _hasActivePackage =
         _parseHasActivePackage(_userProfile) ??
@@ -556,6 +564,30 @@ class SessionManager {
     }
   }
 
+  Future<void> savePendingTopup({
+    required String snapToken,
+    required String orderId,
+  }) async {
+    if (snapToken.isEmpty) return;
+    _pendingTopupSnapToken = snapToken;
+    _pendingTopupOrderId = orderId;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPendingTopupSnapToken, snapToken);
+    if (orderId.isNotEmpty) {
+      await prefs.setString(_keyPendingTopupOrderId, orderId);
+    } else {
+      await prefs.remove(_keyPendingTopupOrderId);
+    }
+  }
+
+  Future<void> clearPendingTopup() async {
+    _pendingTopupSnapToken = null;
+    _pendingTopupOrderId = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyPendingTopupSnapToken);
+    await prefs.remove(_keyPendingTopupOrderId);
+  }
+
   Future<void> clearPendingRedirectUrl(String membershipHistoryId) async {
     if (!_pendingRedirectUrls.containsKey(membershipHistoryId)) return;
     _pendingRedirectUrls.remove(membershipHistoryId);
@@ -729,6 +761,8 @@ class SessionManager {
     _dashboardRideRange = null;
     _pendingSnapTokens = {};
     _pendingRedirectUrls = {};
+    _pendingTopupSnapToken = null;
+    _pendingTopupOrderId = null;
     _refreshToken = null;
     unawaited(_clearStorage());
   }
@@ -750,6 +784,8 @@ class SessionManager {
     _dashboardRideRange = null;
     _pendingSnapTokens = {};
     _pendingRedirectUrls = {};
+    _pendingTopupSnapToken = null;
+    _pendingTopupOrderId = null;
     _refreshToken = null;
     unawaited(_clearAuthStorage());
   }
@@ -783,6 +819,8 @@ class SessionManager {
     await prefs.remove(_keyDashboardRideRange);
     await prefs.remove(_keyPendingSnapTokens);
     await prefs.remove(_keyPendingRedirectUrls);
+    await prefs.remove(_keyPendingTopupSnapToken);
+    await prefs.remove(_keyPendingTopupOrderId);
     await prefs.remove(_keyRentalJson);
     await prefs.remove(_keyRentalStartedAt);
   }
@@ -812,6 +850,8 @@ class SessionManager {
     await prefs.remove(_keyDashboardRideRange);
     await prefs.remove(_keyPendingSnapTokens);
     await prefs.remove(_keyPendingRedirectUrls);
+    await prefs.remove(_keyPendingTopupSnapToken);
+    await prefs.remove(_keyPendingTopupOrderId);
   }
 
   Future<void> saveRefreshToken(String token) async {

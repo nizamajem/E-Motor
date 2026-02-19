@@ -5,7 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'core/navigation/app_navigator.dart';
 import 'core/session/session_manager.dart';
 import 'core/localization/app_localizations.dart';
-import 'features/dashboard/presentation/dashboard_screen.dart';
+import 'features/shell/main_shell.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
 
@@ -39,7 +39,7 @@ class EMotorApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: seenOnboarding
-          ? (hasSession ? const DashboardScreen() : const LoginScreen())
+          ? (hasSession ? const MainShell() : const LoginScreen())
           : const OnboardingScreen(),
     );
   }

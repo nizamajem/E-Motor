@@ -9,7 +9,8 @@ import '../../../core/network/api_config.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../components/loading_dialog.dart';
 import '../../../components/app_motion.dart';
-import '../../dashboard/presentation/dashboard_screen.dart';
+import '../../shell/main_shell.dart';
+import '../../../components/bottom_nav.dart';
 import '../data/payment_service.dart';
 
 enum PaymentFlow { membership, ride }
@@ -323,8 +324,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (!_midtransReady || _midtrans == null) {
           await _initMidtrans();
         }
+        if (!mounted) return;
         if (!_midtransReady || _midtrans == null) {
-          throw Exception('Midtrans belum siap.');
+          _showMidtransNotReady(context);
+          return;
         }
         if (token.isEmpty) {
           throw Exception('Snap token tidak tersedia.');
@@ -396,7 +399,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void _navigateToDashboard(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       appRoute(
-        const DashboardScreen(),
+        const MainShell(initialTab: BottomNavTab.dashboard),
         direction: AxisDirection.right,
       ),
       (route) => false,
@@ -460,6 +463,89 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const SizedBox(height: 8),
                 Text(
                   message.replaceAll('Exception:', '').trim(),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7B8190),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.ok,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMidtransNotReady(BuildContext context) {
+    showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final l10n = AppLocalizations.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.paymentFailed,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.midtransNotReady,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
