@@ -117,6 +117,9 @@ class AppLocalizations {
       'balance': 'Balance',
       'payment_success': 'Payment Success',
       'payment_failed': 'Payment Failed',
+      'topup_failed': 'Top up failed',
+      'topup_redirected': 'Please complete your top up payment',
+      'topup_wallet_missing': 'Wallet data is not available',
       'insufficient_balance': 'Your balance is not sufficient to make payment.',
       'duration_label': 'Duration',
       'distance_label': 'Distance',
@@ -366,6 +369,9 @@ class AppLocalizations {
       'balance': 'Saldo',
       'payment_success': 'Pembayaran Berhasil',
       'payment_failed': 'Pembayaran Gagal',
+      'topup_failed': 'Top up gagal',
+      'topup_redirected': 'Silakan selesaikan pembayaran top up.',
+      'topup_wallet_missing': 'Data wallet tidak tersedia',
       'insufficient_balance':
           'Saldo Anda tidak mencukupi untuk melakukan pembayaran.',
       'duration_label': 'Durasi',
@@ -731,6 +737,9 @@ class AppLocalizations {
   String get balance => _t('balance');
   String get paymentSuccess => _t('payment_success');
   String get paymentFailed => _t('payment_failed');
+  String get topupFailed => _t('topup_failed');
+  String get topupRedirected => _t('topup_redirected');
+  String get topupWalletMissing => _t('topup_wallet_missing');
   String get insufficientBalance => _t('insufficient_balance');
   String get durationLabel => _t('duration_label');
   String get distanceLabel => _t('distance_label');

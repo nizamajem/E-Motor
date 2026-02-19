@@ -39,7 +39,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _isToggling = false;
   bool _isFinding = false;
   bool _hasRental = false;
-  bool _requireStart = false;
   int _elapsedSeconds = 0;
   double _additionalPayment = 0;
   int _overtimeSeconds = 0;
@@ -81,7 +80,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _rental = widget.initialRental ?? SessionManager.instance.rental;
     _isActive = _rental?.motorOn ?? false;
     _hasRental = _rental != null;
-    _requireStart = !_hasRental && !_computeHasActivePackage();
     _elapsedSeconds = 0;
     final startedAt = SessionManager.instance.rentalStartedAt;
     if (_hasRental && startedAt != null) {
@@ -128,7 +126,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           _rental ??= storedRental;
           _isActive = _rental?.motorOn ?? _isActive;
           _hasRental = true;
-          _requireStart = false;
           final startedAt = SessionManager.instance.rentalStartedAt;
           if (startedAt != null) {
             final diff = DateTime.now().difference(startedAt);
@@ -142,7 +139,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         await _bootstrapRental();
       } else {
         setState(() {
-          _requireStart = !_computeHasActivePackage();
         });
       }
       _checkMembershipStatus();
@@ -164,7 +160,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       SessionManager.instance.setHasActivePackage(active);
       if (mounted) {
         setState(() {
-          _requireStart = !_hasRental && !active;
         });
         _ensureTimer();
       }
@@ -191,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           statusRaw == 'START' ||
           statusRaw == 'ENGINE_ON';
       final activeFromDashboard =
-          (data.remainingSeconds != null && data.remainingSeconds! > 0) ||
+          data.remainingSeconds > 0 ||
               (data.validUntil != null &&
                   data.validUntil!.isAfter(DateTime.now()));
       if (!activeFromDashboard) {
@@ -214,7 +209,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             );
             SessionManager.instance.saveRental(_rental!);
           }
-          _requireStart = !_hasRental && !activeFromDashboard;
         });
         _ensureTimer();
         _updateAdditionalPayIfNeeded();
@@ -281,7 +275,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           _status = null;
           _rental = null;
           _hasRental = false;
-          _requireStart = !_computeHasActivePackage();
           _isActive = false;
           _elapsedSeconds = 0;
         });
@@ -311,7 +304,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           _status = null;
           _rental = null;
           _hasRental = false;
-          _requireStart = !_computeHasActivePackage();
           _isActive = false;
           _elapsedSeconds = 0;
         });
@@ -329,7 +321,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() {
       _rental = restored;
       _hasRental = true;
-      _requireStart = false;
       final startedAt = SessionManager.instance.rentalStartedAt;
       if (startedAt != null) {
         final diff = DateTime.now().difference(startedAt);
@@ -448,7 +439,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       _status = null;
       _rental = null;
       _hasRental = false;
-      _requireStart = !_computeHasActivePackage();
       _isActive = false;
       _elapsedSeconds = 0;
       _additionalPayment = 0;

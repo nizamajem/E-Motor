@@ -136,6 +136,31 @@ class SessionManager {
   Map<String, dynamic>? get userProfile => _userProfile;
   Map<String, dynamic>? get emotorProfile => _emotorProfile;
   Map<String, dynamic>? get walletProfile => _walletProfile;
+  String? get customerWalletId {
+    String? readId(Map<String, dynamic>? data) {
+      final id = data?['id']?.toString().trim();
+      return (id == null || id.isEmpty) ? null : id;
+    }
+
+    final wallet = _walletProfile;
+    final direct = readId(wallet);
+    if (direct != null) return direct;
+
+    final user = _userProfile;
+    if (user is Map<String, dynamic>) {
+      final customer = user['Customer'] ?? user['customer'];
+      if (customer is Map<String, dynamic>) {
+        final customerWallet = customer['CustomerWallet'] ??
+            customer['customerWallet'] ??
+            customer['customer_wallet'];
+        if (customerWallet is Map<String, dynamic>) {
+          final walletId = readId(customerWallet);
+          if (walletId != null) return walletId;
+        }
+      }
+    }
+    return null;
+  }
   bool get isVerified => _isVerified;
   int? get walletBalance => _walletBalance;
   String? get customerId => _customerId;

@@ -356,6 +356,10 @@ class _WalletCard extends StatelessWidget {
             label: topUpLabel,
             accent: const Color(0xFF2C7BFE),
             onTap: onTopUp,
+            gradient: const [
+              Color(0xFF2C7BFE),
+              Color(0xFF4CC3FF),
+            ],
           ),
           const SizedBox(width: 6),
           _WalletAction(
@@ -363,6 +367,10 @@ class _WalletCard extends StatelessWidget {
             label: packageLabel,
             accent: const Color(0xFF2C7BFE),
             onTap: onPackage,
+            gradient: const [
+              Color(0xFF1F7AE0),
+              Color(0xFF2C7BFE),
+            ],
           ),
         ],
       ),
@@ -389,12 +397,14 @@ class _WalletAction extends StatelessWidget {
     required this.label,
     required this.accent,
     required this.onTap,
+    required this.gradient,
   });
 
   final IconData icon;
   final String label;
   final Color accent;
   final VoidCallback onTap;
+  final List<Color> gradient;
 
   @override
   Widget build(BuildContext context) {
@@ -410,24 +420,23 @@ class _WalletAction extends StatelessWidget {
               width: 30,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [accent.withValues(alpha: 0.18), Colors.white],
+                  colors: gradient,
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: accent.withValues(alpha: 0.3)),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
+                    color: Color(0x22000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
               child: Icon(
                 icon,
                 size: 16,
-                color: accent,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 2),
