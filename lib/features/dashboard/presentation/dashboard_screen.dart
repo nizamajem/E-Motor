@@ -9,16 +9,13 @@ import '../../../components/loading_dialog.dart';
 import '../../../components/no_internet_dialog.dart';
 import '../../../components/app_motion.dart';
 import '../../../core/network/network_utils.dart';
-import '../../history/presentation/history_screen.dart';
 import '../../history/data/history_service.dart';
 import '../../history/data/history_models.dart';
-import '../../profile/presentation/profile_screen.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../rental/data/emotor_service.dart';
 import '../../rental/data/rental_service.dart';
 import '../../membership/presentation/membership_screen.dart';
 import '../../membership/data/membership_check_service.dart';
-import '../../../components/bottom_nav.dart';
 import '../../../core/navigation/app_route.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/session/session_manager.dart';
@@ -55,6 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   static const Duration kIoTCommandTimeout = Duration(seconds: 12);
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   Timer? _rentalTimeSyncTimer;
+  Timer? _membershipRefreshTimer;
 
   bool _noInternetDialogShown = false;
   bool _resumeInProgress = false;
@@ -92,6 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _bootstrapRental();
     _checkMembershipStatus();
     _refreshDashboard();
+    _startMembershipRefresh();
     _updateAdditionalPayIfNeeded();
   }
 
@@ -103,6 +102,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _statusSub?.cancel();
     _timer?.cancel();
     _rentalTimeSyncTimer?.cancel();
+    _membershipRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -143,6 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
       _checkMembershipStatus();
       _refreshDashboard();
+      _startMembershipRefresh();
       _updateAdditionalPayIfNeeded();
     } finally {
       _resumeInProgress = false;
@@ -186,9 +187,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           statusRaw == 'START' ||
           statusRaw == 'ENGINE_ON';
       final activeFromDashboard =
-          data.remainingSeconds > 0 ||
-              (data.validUntil != null &&
-                  data.validUntil!.isAfter(DateTime.now()));
+          data.validUntil != null &&
+              data.validUntil!.isAfter(DateTime.now());
       if (!activeFromDashboard) {
         await SessionManager.instance.clearMembershipState();
       } else {
@@ -214,6 +214,17 @@ class _DashboardScreenState extends State<DashboardScreen>
         _updateAdditionalPayIfNeeded();
       }
     } catch (_) {}
+  }
+
+  void _startMembershipRefresh() {
+    _membershipRefreshTimer?.cancel();
+    _membershipRefreshTimer = Timer.periodic(
+      const Duration(minutes: 3),
+      (_) {
+        _checkMembershipStatus();
+        _refreshDashboard();
+      },
+    );
   }
 
   Future<void> _bootstrapRental() async {
@@ -663,31 +674,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       onStart: _handleGetPackages,
                     ),
                   ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: AppBottomNavBar(
-                    activeTab: BottomNavTab.dashboard,
-                    onHistoryTap: () {
-                      Navigator.of(context).push(
-                        appRoute(
-                          const HistoryScreen(),
-                          direction: AxisDirection.left,
-                        ),
-                      );
-                    },
-                    onDashboardTap: () {},
-                    onProfileTap: () {
-                      Navigator.of(context).push(
-                        appRoute(
-                          const ProfileScreen(),
-                          direction: AxisDirection.left,
-                        ),
-                      );
-                    },
-                  ),
-                ),
               ],
             ),
           ),
@@ -1561,6 +1547,7 @@ class _NewDashboardContent extends StatelessWidget {
     final remainingFromSession = SessionManager.instance.getRemainingSecondsNow();
     final remainingSeconds =
         remainingFromExpiry > 0 ? remainingFromExpiry : remainingFromSession;
+    final computedValidUntil = _computeValidUntil(expiresAt, remainingSeconds);
     String formatCountdown(int seconds) {
       if (seconds < 0) seconds = 0;
       final hours = seconds ~/ 3600;
@@ -1575,7 +1562,7 @@ class _NewDashboardContent extends StatelessWidget {
           _DashboardHeaderCard(
             plateText: plateText,
             isActive: isActive,
-            expiresAt: expiresAt,
+            expiresAt: computedValidUntil,
             remainingSeconds: remainingSeconds,
             needToPayAmount: needToPayAmount,
             onViewPackage: onViewPackage,
@@ -1625,6 +1612,13 @@ class _NewDashboardContent extends StatelessWidget {
     return diff.inSeconds;
   }
 
+  DateTime? _computeValidUntil(DateTime? validUntil, int remainingSeconds) {
+    if (validUntil != null) return validUntil;
+    if (remainingSeconds > 0) {
+      return DateTime.now().add(Duration(seconds: remainingSeconds));
+    }
+    return null;
+  }
 }
 
 class _DashboardHeaderCard extends StatelessWidget {
@@ -2043,6 +2037,7 @@ class _PackageSummaryCard extends StatelessWidget {
     final minute = dt.minute.toString().padLeft(2, '0');
     return '$day $month ${dt.year} $hour:$minute';
   }
+
 }
 
 class _StatGrid extends StatelessWidget {

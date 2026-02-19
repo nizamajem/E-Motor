@@ -120,6 +120,7 @@ class AppLocalizations {
       'topup_failed': 'Top up failed',
       'topup_redirected': 'Please complete your top up payment',
       'topup_wallet_missing': 'Wallet data is not available',
+      'midtrans_not_ready': 'Midtrans is not ready. Please try again.',
       'insufficient_balance': 'Your balance is not sufficient to make payment.',
       'duration_label': 'Duration',
       'distance_label': 'Distance',
@@ -372,6 +373,7 @@ class AppLocalizations {
       'topup_failed': 'Top up gagal',
       'topup_redirected': 'Silakan selesaikan pembayaran top up.',
       'topup_wallet_missing': 'Data wallet tidak tersedia',
+      'midtrans_not_ready': 'Midtrans belum siap. Coba lagi.',
       'insufficient_balance':
           'Saldo Anda tidak mencukupi untuk melakukan pembayaran.',
       'duration_label': 'Durasi',
@@ -740,6 +742,7 @@ class AppLocalizations {
   String get topupFailed => _t('topup_failed');
   String get topupRedirected => _t('topup_redirected');
   String get topupWalletMissing => _t('topup_wallet_missing');
+  String get midtransNotReady => _t('midtrans_not_ready');
   String get insufficientBalance => _t('insufficient_balance');
   String get durationLabel => _t('duration_label');
   String get distanceLabel => _t('distance_label');

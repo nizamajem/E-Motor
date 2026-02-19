@@ -3,7 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../dashboard/presentation/dashboard_screen.dart';
+import '../../shell/main_shell.dart';
+import '../../../components/bottom_nav.dart';
 import '../../rental/data/rental_service.dart';
 import '../../rental/data/emotor_service.dart';
 import '../../../core/navigation/app_route.dart';
@@ -253,7 +254,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        appRoute(DashboardScreen(initialRental: restored)),
+        appRoute(
+          MainShell(
+            initialTab: BottomNavTab.dashboard,
+            initialRental: restored,
+          ),
+        ),
       );
     } catch (e) {
       _showSnack(e.toString());

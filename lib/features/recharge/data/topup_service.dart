@@ -33,17 +33,25 @@ class TopupService {
     bool isSandbox = true,
   }) async {
     if (customerWalletId.isEmpty || amount <= 0) return null;
-    final res = await _client.postJson(
-      ApiConfig.topupSnapPath,
-      auth: true,
-      body: {
-        'customerWalletId': customerWalletId,
-        'amount': amount,
-        'isSandbox': isSandbox,
-      },
-    );
-    final data = res['data'] ?? res;
-    if (data is! Map<String, dynamic>) return null;
-    return TopupSnapResponse.fromJson(data);
+    try {
+      final res = await _client.postJson(
+        ApiConfig.topupSnapPath,
+        auth: true,
+        body: {
+          'customerWalletId': customerWalletId,
+          'amount': amount,
+          'isSandbox': isSandbox,
+        },
+      );
+      final data = res['data'] ?? res;
+      if (data is! Map<String, dynamic>) return null;
+      return TopupSnapResponse.fromJson(data);
+    } on ApiException catch (e) {
+      final message =
+          e.message.isNotEmpty ? e.message : 'Top up failed';
+      throw Exception(message);
+    } catch (_) {
+      throw Exception('Top up failed');
+    }
   }
 }
