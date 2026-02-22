@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../components/app_motion.dart';
+import '../../../components/app_feedback.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
 import '../data/topup_service.dart';
@@ -238,7 +239,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
   }
 
   void _showSnack(String message) {
-    showAppSnackBar(context, message);
+    showInfoSnack(context, message);
   }
 
   Future<void> _showMidtransNotReadyDialog({String? message}) async {

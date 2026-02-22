@@ -134,7 +134,7 @@ class AppNavigator {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Access Token:',
+                  '${AppLocalizations.of(dialogContext).accessTokenLabel}:',
                   style: GoogleFonts.poppins(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
@@ -152,7 +152,7 @@ class AppNavigator {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Refresh Token:',
+                  '${AppLocalizations.of(dialogContext).refreshTokenLabel}:',
                   style: GoogleFonts.poppins(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
@@ -183,7 +183,7 @@ class AppNavigator {
                       ),
                     ),
                     child: Text(
-                      'OK',
+                      AppLocalizations.of(dialogContext).ok,
                       style: GoogleFonts.poppins(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,

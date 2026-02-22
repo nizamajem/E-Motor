@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../localization/app_localizations.dart';
 import '../navigation/app_navigator.dart';
 import '../session/session_manager.dart';
 import 'api_config.dart';
@@ -77,7 +78,7 @@ class ApiClient {
 
   bool _shouldRetryWithRefresh(http.Response response) {
     final status = response.statusCode;
-    return status == 401;
+    return status == 401 || status == 403;
   }
 
   Future<bool> _refreshToken() async {
@@ -102,7 +103,7 @@ class ApiClient {
     }
     SessionManager.instance.clearAuth();
     await AppNavigator.showRefreshDialog(
-      'Refresh token gagal. Silakan login ulang.',
+      AppLocalizations.current.refreshFailed,
     );
     return false;
   }
@@ -143,11 +144,22 @@ class ApiClient {
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic>) {
-        final token = decoded['access_token']?.toString() ??
-            decoded['token']?.toString() ??
-            decoded['accessToken']?.toString() ??
-            '';
-        if (token.isNotEmpty) return token;
+        String? readToken(Map<String, dynamic> map) {
+          final token = map['access_token']?.toString() ??
+              map['token']?.toString() ??
+              map['accessToken']?.toString();
+          if (token != null && token.isNotEmpty) return token;
+          return null;
+        }
+
+        final direct = readToken(decoded);
+        if (direct != null) return direct;
+
+        final data = decoded['data'];
+        if (data is Map<String, dynamic>) {
+          final nested = readToken(data);
+          if (nested != null) return nested;
+        }
       }
     } catch (_) {
       return '';
@@ -183,7 +195,10 @@ class ApiClient {
       decoded = jsonDecode(raw);
     } on FormatException {
       if (status >= 200 && status < 300) {
-        throw ApiException('Invalid server response.', statusCode: status);
+        throw ApiException(
+          AppLocalizations.current.invalidServerResponse,
+          statusCode: status,
+        );
       }
       throw ApiException(
         raw.length > 160 ? raw.substring(0, 160) : raw,
@@ -194,7 +209,8 @@ class ApiClient {
 
     if (status >= 200 && status < 300) return data;
 
-    final message = data['message'] ?? data['error'] ?? 'Unexpected error';
+    final message =
+        data['message'] ?? data['error'] ?? AppLocalizations.current.unexpectedError;
     throw ApiException(message.toString(), statusCode: status);
   }
 

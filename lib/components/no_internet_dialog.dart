@@ -6,7 +6,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/localization/app_localizations.dart';
 import 'app_motion.dart';
 
-Future<void> showNoInternetDialog(BuildContext context) async {
+Future<void> showNoInternetDialog(
+  BuildContext context, {
+  String? titleOverride,
+  String? messageOverride,
+}) async {
   StreamSubscription<List<ConnectivityResult>>? sub;
   try {
     await showAppDialog(
@@ -43,7 +47,8 @@ Future<void> showNoInternetDialog(BuildContext context) async {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    AppLocalizations.of(context).errorNoInternet,
+                    titleOverride ??
+                        AppLocalizations.of(context).errorNoInternet,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       fontSize: 15,
@@ -52,7 +57,8 @@ Future<void> showNoInternetDialog(BuildContext context) async {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    AppLocalizations.of(context).noInternetDescription,
+                    messageOverride ??
+                        AppLocalizations.of(context).noInternetDescription,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       fontSize: 12.5,

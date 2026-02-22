@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class TopupSnapResponse {
   TopupSnapResponse({
@@ -48,10 +49,10 @@ class TopupService {
       return TopupSnapResponse.fromJson(data);
     } on ApiException catch (e) {
       final message =
-          e.message.isNotEmpty ? e.message : 'Top up failed';
+          e.message.isNotEmpty ? e.message : AppLocalizations.current.topupFailed;
       throw Exception(message);
     } catch (_) {
-      throw Exception('Top up failed');
+      throw Exception(AppLocalizations.current.topupFailed);
     }
   }
 }
