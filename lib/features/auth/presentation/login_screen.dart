@@ -12,6 +12,7 @@ import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../components/app_motion.dart';
+import '../../../components/app_feedback.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -290,12 +291,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (emotor != null) {
       await SessionManager.instance.saveEmotorId(emotor.id);
     } else {
-      _showSnack('Tidak menemukan e-motor yang terikat ke akun ini.');
+      if (!mounted) return;
+      _showSnack(AppLocalizations.of(context).emotorNotAssigned);
     }
   }
 
   void _showSnack(String message) {
-    showAppSnackBar(context, message, isError: true);
+    showErrorSnack(context, message);
   }
 
 }
@@ -311,11 +313,11 @@ Future<void> _showContactAdminDialog(
   const phoneNumber = '+62 821-4454-0304';
   const waNumber = '6282144540304';
   final cleanUsername = (username ?? '').trim();
+  final usernameSuffix =
+      cleanUsername.isNotEmpty ? ' ${l10n.username}: $cleanUsername.' : '';
   final message = reason == _ContactReason.resetPassword
-      ? 'Halo Admin, saya ingin reset password.'
-          '${cleanUsername.isNotEmpty ? ' Username: $cleanUsername.' : ''}'
-      : 'Halo Admin, saya ingin bantuan pembuatan akun.'
-          '${cleanUsername.isNotEmpty ? ' Username: $cleanUsername.' : ''}';
+      ? l10n.contactAdminResetMessage(usernameSuffix)
+      : l10n.contactAdminNewMessage(usernameSuffix);
   final encodedMessage = Uri.encodeComponent(message);
   final url = Uri.parse('https://wa.me/$waNumber?text=$encodedMessage');
   await showAppDialog<void>(

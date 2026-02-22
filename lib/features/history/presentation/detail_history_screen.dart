@@ -7,6 +7,7 @@ import '../../../core/navigation/app_route.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../components/app_motion.dart';
+import '../../../components/app_feedback.dart';
 import '../data/feedback_service.dart';
 import '../../../core/network/api_client.dart';
 
@@ -242,10 +243,9 @@ class DetailHistoryScreen extends StatelessWidget {
                                     : () async {
                                         final text = controller.text.trim();
                                         if (text.isEmpty) {
-                                          showAppSnackBar(
+                                          showErrorSnack(
                                             ctx,
                                             l10n.feedbackInput,
-                                            isError: true,
                                           );
                                           return;
                                         }
@@ -362,17 +362,15 @@ class DetailHistoryScreen extends StatelessWidget {
                                           );
                                         } on ApiException catch (e) {
                                           if (!ctx.mounted) return;
-                                          showAppSnackBar(
+                                          showErrorSnack(
                                             ctx,
                                             e.message,
-                                            isError: true,
                                           );
                                         } catch (e) {
                                           if (!ctx.mounted) return;
-                                          showAppSnackBar(
+                                          showErrorSnack(
                                             ctx,
                                             e.toString(),
-                                            isError: true,
                                           );
                                         } finally {
                                           if (ctx.mounted) {

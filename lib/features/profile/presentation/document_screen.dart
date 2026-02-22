@@ -9,6 +9,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../components/loading_dialog.dart';
 import '../../../components/app_motion.dart';
+import '../../../components/app_feedback.dart';
 import '../data/kyc_service.dart';
 class DocumentScreen extends StatelessWidget {
   const DocumentScreen({super.key});
@@ -439,7 +440,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
   }
 
   void _showSnack(String message) {
-    showAppSnackBar(context, message, isError: true);
+    showErrorSnack(context, message);
   }
 }
 

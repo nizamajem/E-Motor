@@ -145,7 +145,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                       const SizedBox(height: 12),
                       _PaymentOptionCard(
-                        title: 'Midtrans',
+                        title: l10n.midtransTitle,
                         subtitle: '',
                         isSelected: _selectedIndex == 1,
                         onTap: () => setState(() => _selectedIndex = 1),
@@ -154,7 +154,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ] else
                       _PaymentOptionCard(
-                        title: 'Midtrans',
+                        title: l10n.midtransTitle,
                         subtitle: '',
                         isSelected: true,
                         onTap: () {},
@@ -229,6 +229,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _processPayment(BuildContext context) async {
     if (_isProcessing) return;
+    final l10n = AppLocalizations.of(context);
     _cancelRequested = false;
     if (kDebugMode) {
       debugPrint('payment start flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
@@ -257,7 +258,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (widget.flow == PaymentFlow.membership) {
         final membershipId = widget.membershipId ?? '';
         if (membershipId.isEmpty) {
-          throw Exception('Membership ID tidak tersedia.');
+          throw Exception(l10n.membershipIdMissing);
         }
         final userId = await SessionManager.instance.resolveUserId();
         final customerId = _resolveCustomerId();
@@ -265,7 +266,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           debugPrint('membership pay userId=$userId customerId=$customerId membershipId=$membershipId');
         }
         if (userId.isEmpty) {
-          throw Exception('User ID tidak tersedia.');
+          throw Exception(l10n.userIdMissing);
         }
         if (method == 'WALLET') {
           result = await _paymentService.buyMembershipWallet(
@@ -305,7 +306,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       } else {
         final rideId = widget.rideId ?? '';
         if (rideId.isEmpty) {
-          throw Exception('Ride ID tidak tersedia.');
+          throw Exception(l10n.rideIdMissing);
         }
         if (method == 'WALLET') {
           result = await _paymentService.payRideWallet(rideId: rideId);
@@ -324,13 +325,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (!_midtransReady || _midtrans == null) {
           await _initMidtrans();
         }
-        if (!mounted) return;
+        if (!context.mounted) return;
         if (!_midtransReady || _midtrans == null) {
           _showMidtransNotReady(context);
           return;
         }
         if (token.isEmpty) {
-          throw Exception('Snap token tidak tersedia.');
+          throw Exception(l10n.snapTokenMissing);
         }
         await _midtrans!.startPaymentUiFlow(token: token);
         return;
@@ -342,7 +343,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (kDebugMode) {
         debugPrint('payment success flow=${widget.flow} method=$method');
       }
-      if (!mounted) return;
+      if (!context.mounted) return;
       // ignore: use_build_context_synchronously
       _navigateToDashboard(context);
     } catch (e) {
@@ -351,7 +352,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           debugPrint('payment error=$e');
           debugPrint('payment failed flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
         }
-        if (!mounted) return;
+        if (!context.mounted) return;
         // ignore: use_build_context_synchronously
         _showPaymentError(context, e.toString());
       }

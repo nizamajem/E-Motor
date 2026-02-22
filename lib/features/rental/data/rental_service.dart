@@ -166,15 +166,16 @@ class RentalService {
   final ApiClient _client;
 
   String? _findStringByKey(Map<String, dynamic> map, List<String> keys) {
+    final needle = keys.map((k) => k.toLowerCase()).toList();
     for (final entry in map.entries) {
       final key = entry.key.toLowerCase();
       final value = entry.value;
-      if (keys.any((k) => key.contains(k))) {
+      if (needle.any((k) => key.contains(k))) {
         if (value is String && value.isNotEmpty) return value;
         if (value != null && value.toString().isNotEmpty) return value.toString();
       }
       if (value is Map<String, dynamic>) {
-        final nested = _findStringByKey(value, keys);
+        final nested = _findStringByKey(value, needle);
         if (nested != null && nested.isNotEmpty) return nested;
       }
     }
@@ -315,7 +316,7 @@ class RentalService {
               );
     debugPrint('login parsed userId=$userId emotorId=$emotorId emotorImei=$emotorImei');
     if (token.isEmpty) {
-      throw ApiException('Token kosong dari server, pastikan endpoint login-emotor benar.');
+      throw ApiException(AppLocalizations.current.tokenEmptyLogin);
     }
 
     final session = UserSession(token: token, name: name, email: email, userId: userId);
@@ -371,7 +372,7 @@ class RentalService {
         SessionManager.instance.userProfile?['id']?.toString().trim() ??
         '';
     if (userId.isEmpty) {
-      throw ApiException('UserId tidak ditemukan. Silakan login ulang.');
+      throw ApiException(AppLocalizations.current.userIdMissingRelogin);
     }
     final emotorIdFromProfile = SessionManager.instance.emotorProfile?['id']?.toString().trim();
     final emotorIdFromUser = (SessionManager.instance.userProfile?['emotor'] is Map<String, dynamic>)
@@ -389,8 +390,7 @@ class RentalService {
     debugPrint(
         'startRental emotorId=$emotorId sessionEmotorId=${SessionManager.instance.emotorId}');
     if (emotorId.isEmpty) {
-      throw ApiException(
-          'EMOTOR_ID belum diset. Jalankan dengan --dart-define=EMOTOR_ID=xxx atau simpan di session.');
+        throw ApiException(AppLocalizations.current.emotorIdMissingConfig);
     }
     if ((SessionManager.instance.emotorId ?? '').isEmpty) {
       await SessionManager.instance.saveEmotorId(emotorId);
@@ -432,7 +432,7 @@ class RentalService {
         (emotorIdFromUser != null && emotorIdFromUser.isNotEmpty ? emotorIdFromUser : null) ??
         ApiConfig.emotorId;
     if (emotorId.isEmpty) {
-      throw ApiException('Tidak ada emotorId untuk kirim perintah ACC.');
+      throw ApiException(AppLocalizations.current.emotorIdMissingAcc);
     }
     final res = await _client.postJson(
       ApiConfig.accCommandPath,
@@ -468,7 +468,7 @@ class RentalService {
             : null) ??
         ApiConfig.emotorId;
     if (emotorId.isEmpty) {
-      throw ApiException('Tidak ada emotorId untuk perintah find.');
+      throw ApiException(AppLocalizations.current.emotorIdMissingFind);
     }
     final res = await _client.postJson(
       ApiConfig.findCommandPath,
@@ -507,14 +507,14 @@ class RentalService {
     final rideId = SessionManager.instance.rental?.rideHistoryId;
     final userId = SessionManager.instance.user?.userId ?? '';
     if (userId.isEmpty) {
-      throw ApiException('UserId tidak ditemukan. Silakan login ulang.');
+      throw ApiException(AppLocalizations.current.userIdMissingRelogin);
     }
     final emotorId = SessionManager.instance.rental?.emotorId ??
         SessionManager.instance.emotorId ??
         ApiConfig.emotorId;
     final emotorImei = SessionManager.instance.emotorImei ?? '';
     if ((rideId == null || rideId.isEmpty) && emotorId.isEmpty && emotorImei.isEmpty) {
-      throw ApiException('Tidak ada rideId, emotorId, atau IMEI untuk diakhiri.');
+      throw ApiException(AppLocalizations.current.rideEndMissingIds);
     }
     final res = await _client.postJson(
       ApiConfig.endRentalPath,

@@ -32,6 +32,7 @@ class AppLocalizations {
       'nav_history': 'History',
       'nav_dashboard': 'Dashboard',
       'nav_profile': 'Profile',
+      'app_title': 'Gridwiz E-Motor',
       'documents': 'Documents',
       'verify_documents': 'Verify Documents',
       'verified': 'Verified',
@@ -67,6 +68,7 @@ class AppLocalizations {
       'upload_required': 'Please upload both front and back images.',
       'upload_success': 'Documents uploaded successfully.',
       'upload_file_type_error': 'File must be JPG or PNG.',
+      'upload_failed': 'Upload failed ({status}).',
       'document_verified_title': 'Documents Verified',
       'document_verified_body':
           'Your documents have been verified. No further action is needed.',
@@ -101,13 +103,19 @@ class AppLocalizations {
       'hours': 'hours',
       'day_label': 'day',
       'min_balance_prefix': 'Minimum balance',
+      'access_token_label': 'Access Token',
+      'refresh_token_label': 'Refresh Token',
       'finding': 'Finding...',
+      'emotor_default_name': 'E-Motor',
       'change_motor': 'Change Motor',
       'contact_operator': 'Contact Operator',
       'change_motor_title': 'Contact Operator',
       'change_motor_body':
           'If the motor has an issue or you want to switch, contact the operator for quick assistance.',
+      'contact_operator_message':
+          'Hello Operator, I need help replacing the motor.',
       'payment_title': 'Payment',
+      'midtrans_title': 'Midtrans',
       'payment_amount_due': 'Amount to pay',
       'payment_method': 'Select payment method',
       'pay': 'Pay',
@@ -117,6 +125,10 @@ class AppLocalizations {
       'balance': 'Balance',
       'payment_success': 'Payment Success',
       'payment_failed': 'Payment Failed',
+      'membership_id_missing': 'Membership ID is not available.',
+      'user_id_missing': 'User ID is not available.',
+      'ride_id_missing': 'Ride ID is not available.',
+      'snap_token_missing': 'Snap token is not available.',
       'topup_failed': 'Top up failed',
       'topup_redirected': 'Please complete your top up payment',
       'topup_wallet_missing': 'Wallet data is not available',
@@ -144,6 +156,11 @@ class AppLocalizations {
       'no_account': "Don't have account? ",
       'contact_admin': 'Contact Admin',
       'login_required': 'Username and password are required',
+      'contact_admin_reset_message':
+          'Hello Admin, I want to reset my password.{username}',
+      'contact_admin_new_message':
+          'Hello Admin, I want help creating an account.{username}',
+      'rider_default': 'Rider',
       'welcome': 'Welcome ',
       'tagline': 'A seamless electric mobility powered by real-time technology',
       'locked': 'Locked',
@@ -238,6 +255,9 @@ class AppLocalizations {
       'logout_blocked_title': 'Logout is paused',
       'logout_blocked_body':
           'Please end your rental first, then you can log out safely.',
+      'finding_connection_title': 'Waiting for internet',
+      'finding_connection_body':
+          'Waiting for internet connection to find a vehicle...',
       'no': 'No',
       'yes': 'Yes',
       'skip': 'Skip',
@@ -271,6 +291,19 @@ class AppLocalizations {
           'Connection is slow. The vehicle is not responding.',
       'error_network_generic': 'Network error occurred. Please try again.',
       'error_session_expired': 'Session expired. Please login again.',
+      'refresh_failed': 'Refresh token failed. Please log in again.',
+      'invalid_server_response': 'Invalid server response.',
+      'unexpected_error': 'Unexpected error.',
+      'token_missing': 'Token is not available.',
+      'token_empty_login':
+          'Empty token from server. Please verify the login-emotor endpoint.',
+      'user_id_missing_relogin': 'UserId not found. Please log in again.',
+      'emotor_id_missing_config':
+          'EMOTOR_ID is not set. Run with --dart-define=EMOTOR_ID=xxx or save it in session.',
+      'emotor_id_missing_acc': 'No emotorId available to send ACC command.',
+      'emotor_id_missing_find': 'No emotorId available for find command.',
+      'ride_end_missing_ids': 'No rideId, emotorId, or IMEI to end.',
+      'emotor_not_assigned': 'No e-motor is linked to this account.',
       'error_history_not_found': 'Trip details not found.',
       'rental_ended_remote': 'Rental has been ended from backend.',
       'end_rental_confirm_title': 'End Rental?',
@@ -284,6 +317,7 @@ class AppLocalizations {
       'nav_history': 'History',
       'nav_dashboard': 'Dashboard',
       'nav_profile': 'Profile',
+      'app_title': 'Gridwiz E-Motor',
       'documents': 'Dokumen',
       'verify_documents': 'Verifikasi Dokumen',
       'verified': 'Terverifikasi',
@@ -320,6 +354,7 @@ class AppLocalizations {
       'upload_required': 'Mohon unggah gambar depan dan belakang.',
       'upload_success': 'Dokumen berhasil diunggah.',
       'upload_file_type_error': 'File harus JPG atau PNG.',
+      'upload_failed': 'Upload gagal ({status}).',
       'document_verified_title': 'Dokumen Terverifikasi',
       'document_verified_body':
           'Dokumen Anda sudah terverifikasi. Tidak perlu tindakan tambahan.',
@@ -354,13 +389,19 @@ class AppLocalizations {
       'hours': 'Jam',
       'day_label': 'hari',
       'min_balance_prefix': 'Minimal Saldo',
+      'access_token_label': 'Token Akses',
+      'refresh_token_label': 'Token Refresh',
       'finding': 'Mencari...',
+      'emotor_default_name': 'E-Motor',
       'change_motor': 'Ganti Motor',
       'contact_operator': 'Hubungi Operator',
       'change_motor_title': 'Hubungi Operator',
       'change_motor_body':
           'Jika motor bermasalah atau ingin mengganti, hubungi operator untuk bantuan cepat.',
+      'contact_operator_message':
+          'Halo Operator, saya butuh bantuan untuk penggantian motor.',
       'payment_title': 'Pembayaran',
+      'midtrans_title': 'Midtrans',
       'payment_amount_due': 'Jumlah yang harus dibayar',
       'payment_method': 'Pilih metode pembayaran',
       'pay': 'Bayar',
@@ -370,6 +411,10 @@ class AppLocalizations {
       'balance': 'Saldo',
       'payment_success': 'Pembayaran Berhasil',
       'payment_failed': 'Pembayaran Gagal',
+      'membership_id_missing': 'Membership ID tidak tersedia.',
+      'user_id_missing': 'User ID tidak tersedia.',
+      'ride_id_missing': 'Ride ID tidak tersedia.',
+      'snap_token_missing': 'Snap token tidak tersedia.',
       'topup_failed': 'Top up gagal',
       'topup_redirected': 'Silakan selesaikan pembayaran top up.',
       'topup_wallet_missing': 'Data wallet tidak tersedia',
@@ -399,6 +444,11 @@ class AppLocalizations {
       'no_account': 'Belum punya akun? ',
       'contact_admin': 'Hubungi Admin',
       'login_required': 'Username dan password harus diisi',
+      'contact_admin_reset_message':
+          'Halo Admin, saya ingin reset password.{username}',
+      'contact_admin_new_message':
+          'Halo Admin, saya ingin bantuan pembuatan akun.{username}',
+      'rider_default': 'Pengendara',
       'welcome': 'Selamat datang ',
       'tagline': 'Mobilitas listrik yang mulus dengan teknologi real-time',
       'locked': 'Terkunci',
@@ -494,6 +544,9 @@ class AppLocalizations {
       'logout_blocked_title': 'Logout ditunda dulu',
       'logout_blocked_body':
           'Mohon end rental dulu sebelum logout, ya.',
+      'finding_connection_title': 'Mencari koneksi internet',
+      'finding_connection_body':
+          'Menunggu koneksi internet untuk mencari kendaraan...',
       'no': 'Tidak',
       'yes': 'Ya',
       'skip': 'Lewati',
@@ -525,6 +578,20 @@ class AppLocalizations {
           'Koneksi lambat. Kendaraan tidak merespons.',
       'error_network_generic': 'Terjadi gangguan jaringan. Silakan coba lagi.',
       'error_session_expired': 'Sesi berakhir. Silakan login ulang.',
+      'refresh_failed': 'Refresh token gagal. Silakan login ulang.',
+      'invalid_server_response': 'Respons server tidak valid.',
+      'unexpected_error': 'Terjadi kesalahan tak terduga.',
+      'token_missing': 'Token tidak tersedia.',
+      'token_empty_login':
+          'Token kosong dari server, pastikan endpoint login-emotor benar.',
+      'user_id_missing_relogin': 'UserId tidak ditemukan. Silakan login ulang.',
+      'emotor_id_missing_config':
+          'EMOTOR_ID belum diset. Jalankan dengan --dart-define=EMOTOR_ID=xxx atau simpan di session.',
+      'emotor_id_missing_acc': 'Tidak ada emotorId untuk kirim perintah ACC.',
+      'emotor_id_missing_find': 'Tidak ada emotorId untuk perintah find.',
+      'ride_end_missing_ids':
+          'Tidak ada rideId, emotorId, atau IMEI untuk diakhiri.',
+      'emotor_not_assigned': 'Tidak menemukan e-motor yang terikat ke akun ini.',
       'error_history_not_found': 'Detail history tidak ditemukan.',
       'rental_ended_remote': 'Rental sudah diakhiri dari backend.',
       'no_internet_description':
@@ -549,6 +616,11 @@ class AppLocalizations {
   String get noAccount => _t('no_account');
   String get contactAdmin => _t('contact_admin');
   String get loginRequired => _t('login_required');
+  String contactAdminResetMessage(String usernameSuffix) =>
+      _t('contact_admin_reset_message').replaceAll('{username}', usernameSuffix);
+  String contactAdminNewMessage(String usernameSuffix) =>
+      _t('contact_admin_new_message').replaceAll('{username}', usernameSuffix);
+  String get riderDefault => _t('rider_default');
   String get welcome => _t('welcome');
   String get tagline => _t('tagline');
   String get locked => _t('locked');
@@ -639,6 +711,8 @@ class AppLocalizations {
   String get logoutConfirm => _t('logout_confirm');
   String get logoutBlockedTitle => _t('logout_blocked_title');
   String get logoutBlockedBody => _t('logout_blocked_body');
+  String get findingConnectionTitle => _t('finding_connection_title');
+  String get findingConnectionBody => _t('finding_connection_body');
   String get no => _t('no');
   String get yes => _t('yes');
   String get skip => _t('skip');
@@ -665,6 +739,7 @@ class AppLocalizations {
   String get navHistory => _t('nav_history');
   String get navDashboard => _t('nav_dashboard');
   String get navProfile => _t('nav_profile');
+  String get appTitle => _t('app_title');
   String get documents => _t('documents');
   String get verifyDocuments => _t('verify_documents');
   String get verified => _t('verified');
@@ -694,6 +769,8 @@ class AppLocalizations {
   String get uploadRequired => _t('upload_required');
   String get uploadSuccess => _t('upload_success');
   String get uploadFileTypeError => _t('upload_file_type_error');
+  String uploadFailed(String status) =>
+      _t('upload_failed').replaceAll('{status}', status);
   String get documentVerifiedTitle => _t('document_verified_title');
   String get documentVerifiedBody => _t('document_verified_body');
   String get documentUnderReviewTitle => _t('document_under_review_title');
@@ -724,12 +801,17 @@ class AppLocalizations {
   String get hours => _t('hours');
   String get dayLabel => _t('day_label');
   String get minBalancePrefix => _t('min_balance_prefix');
+  String get accessTokenLabel => _t('access_token_label');
+  String get refreshTokenLabel => _t('refresh_token_label');
   String get finding => _t('finding');
+  String get emotorDefaultName => _t('emotor_default_name');
   String get changeMotor => _t('change_motor');
   String get contactOperator => _t('contact_operator');
   String get changeMotorTitle => _t('change_motor_title');
   String get changeMotorBody => _t('change_motor_body');
+  String get contactOperatorMessage => _t('contact_operator_message');
   String get paymentTitle => _t('payment_title');
+  String get midtransTitle => _t('midtrans_title');
   String get paymentAmountDue => _t('payment_amount_due');
   String get paymentMethod => _t('payment_method');
   String get pay => _t('pay');
@@ -739,6 +821,10 @@ class AppLocalizations {
   String get balance => _t('balance');
   String get paymentSuccess => _t('payment_success');
   String get paymentFailed => _t('payment_failed');
+  String get membershipIdMissing => _t('membership_id_missing');
+  String get userIdMissing => _t('user_id_missing');
+  String get rideIdMissing => _t('ride_id_missing');
+  String get snapTokenMissing => _t('snap_token_missing');
   String get topupFailed => _t('topup_failed');
   String get topupRedirected => _t('topup_redirected');
   String get topupWalletMissing => _t('topup_wallet_missing');
@@ -757,6 +843,17 @@ class AppLocalizations {
   String get bonus => _t('bonus');
   String get errorNetworkGeneric => _t('error_network_generic');
   String get errorSessionExpired => _t('error_session_expired');
+  String get refreshFailed => _t('refresh_failed');
+  String get invalidServerResponse => _t('invalid_server_response');
+  String get unexpectedError => _t('unexpected_error');
+  String get tokenMissing => _t('token_missing');
+  String get tokenEmptyLogin => _t('token_empty_login');
+  String get userIdMissingRelogin => _t('user_id_missing_relogin');
+  String get emotorIdMissingConfig => _t('emotor_id_missing_config');
+  String get emotorIdMissingAcc => _t('emotor_id_missing_acc');
+  String get emotorIdMissingFind => _t('emotor_id_missing_find');
+  String get rideEndMissingIds => _t('ride_end_missing_ids');
+  String get emotorNotAssigned => _t('emotor_not_assigned');
   String get errorHistoryNotFound => _t('error_history_not_found');
   String get rentalEndedRemote => _t('rental_ended_remote');
   String get noInternetConnection => _t('no_internet_connection');

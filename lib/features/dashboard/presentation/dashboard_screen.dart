@@ -8,10 +8,10 @@ import '../../../components/find_no_connection_dialog.dart';
 import '../../../components/loading_dialog.dart';
 import '../../../components/no_internet_dialog.dart';
 import '../../../components/app_motion.dart';
+import '../../../components/app_feedback.dart';
 import '../../../core/network/network_utils.dart';
 import '../../history/data/history_service.dart';
 import '../../history/data/history_models.dart';
-import '../../auth/presentation/login_screen.dart';
 import '../../rental/data/emotor_service.dart';
 import '../../rental/data/rental_service.dart';
 import '../../membership/presentation/membership_screen.dart';
@@ -479,88 +479,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         _isFinding = false;
       });
     }
+    // Centralized session-expired UX is handled by AppNavigator (refresh flow).
     SessionManager.instance.clearAuth();
-    if (!mounted) return;
-    await showAppDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        final dialogL10n = AppLocalizations.of(dialogContext);
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 56,
-                  width: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF2C7BFE),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x332C7BFE),
-                        blurRadius: 14,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.lock_clock_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  dialogL10n.errorSessionExpired,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      backgroundColor: const Color(0xFF2C7BFE),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      dialogL10n.signIn,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      appRoute(const LoginScreen(), direction: AxisDirection.right),
-      (route) => false,
-    );
   }
 
   bool _shouldSyncElapsed(int serverSeconds) {
@@ -579,6 +499,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     String firstNonEmpty(List<String?> values, String fallback) {
       for (final value in values) {
         final text = value?.toString().trim();
@@ -592,7 +513,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     final rental = _rental;
     final status = _status;
-    final riderName = SessionManager.instance.user?.name ?? 'Rider';
+    final riderName = SessionManager.instance.user?.name ?? l10n.riderDefault;
     final emotorFromProfile = SessionManager.instance.emotorProfile;
     final emotorFromUser = SessionManager.instance.userProfile?['emotor'];
     final emotorPlate =
@@ -624,7 +545,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         ? emotorPlate
         : (emotorName != null && emotorName.isNotEmpty)
         ? emotorName
-        : 'E-Motor';
+        : l10n.emotorDefaultName;
     final plateText = firstNonEmpty([
       status?.plate,
       rental?.plate,
@@ -772,7 +693,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _showSnack(String message) {
-    showAppSnackBar(context, message);
+    showInfoSnack(context, message);
   }
 
   bool _isMembershipExpired() {
@@ -1018,9 +939,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final l10n = AppLocalizations.of(context);
     const phoneNumber = '+62 821-4454-0304';
     const waNumber = '6282144540304';
-    final message = Uri.encodeComponent(
-      'Halo Operator, saya butuh bantuan untuk penggantian motor.',
-    );
+    final message = Uri.encodeComponent(l10n.contactOperatorMessage);
     final url = Uri.parse('https://wa.me/$waNumber?text=$message');
     await showAppDialog<void>(
       context: context,

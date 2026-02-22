@@ -17,7 +17,7 @@ class EMotorApp extends StatelessWidget {
     final hasSession = SessionManager.instance.token != null;
     final seenOnboarding = SessionManager.instance.onboardingSeen;
     return MaterialApp(
-      title: 'Gridwiz E-Motor',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       navigatorKey: AppNavigator.key,
