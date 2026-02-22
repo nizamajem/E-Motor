@@ -464,9 +464,10 @@ packages:
   midtrans_sdk:
     dependency: "direct main"
     description:
-      path: "packages/midtrans_sdk"
-      relative: true
-    source: path
+      name: midtrans_sdk
+      sha256: "76ceac7e0f02f53fed2c7b5fc64774186281521183887c1e6eb378875bf5d82b"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0"
   mime:
     dependency: transitive
