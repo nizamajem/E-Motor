@@ -152,6 +152,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const SizedBox(height: 12),
                       _PaymentOptionCard(
                         title: l10n.midtransTitle,
+                        title: l10n.midtransTitle,
                         subtitle: '',
                         isSelected: _selectedIndex == 1,
                         onTap: () => setState(() => _selectedIndex = 1),
@@ -160,6 +161,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ] else
                       _PaymentOptionCard(
+                        title: l10n.midtransTitle,
                         title: l10n.midtransTitle,
                         subtitle: '',
                         isSelected: true,
@@ -177,8 +179,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 width: double.infinity,
                 height: 46,
                 child: ElevatedButton(
-                  onPressed:
-                      _isProcessing ? null : () => _showPaymentConfirm(context),
+                  onPressed: _isProcessing
+                      ? null
+                      : () => _showPaymentConfirm(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2C7BFE),
                     foregroundColor: Colors.white,
@@ -236,10 +239,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _processPayment(BuildContext context) async {
     if (_isProcessing) return;
     final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context);
     _cancelRequested = false;
     _paymentFinalized = false;
     if (kDebugMode) {
-      debugPrint('payment start flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
+      debugPrint(
+        'payment start flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}',
+      );
     }
     if (_selectedIndex == 0 && widget.walletBalance < widget.amount) {
       _showPaymentFailed(context);
@@ -260,20 +266,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _loadingVisible = true;
     try {
       if (_cancelRequested) return;
-      final method =
-          _selectedIndex == 0 ? 'WALLET' : 'MIDTRANS';
+      final method = _selectedIndex == 0 ? 'WALLET' : 'MIDTRANS';
       PaymentResult result;
       if (widget.flow == PaymentFlow.membership) {
         final membershipId = widget.membershipId ?? '';
         if (membershipId.isEmpty) {
           throw Exception(l10n.membershipIdMissing);
+          throw Exception(l10n.membershipIdMissing);
         }
         final userId = await SessionManager.instance.resolveUserId();
         final customerId = _resolveCustomerId();
         if (kDebugMode) {
-          debugPrint('membership pay userId=$userId customerId=$customerId membershipId=$membershipId');
+          debugPrint(
+            'membership pay userId=$userId customerId=$customerId membershipId=$membershipId',
+          );
         }
         if (userId.isEmpty) {
+          throw Exception(l10n.userIdMissing);
           throw Exception(l10n.userIdMissing);
         }
         if (method == 'WALLET') {
@@ -315,6 +324,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         final rideId = widget.rideId ?? '';
         if (rideId.isEmpty) {
           throw Exception(l10n.rideIdMissing);
+          throw Exception(l10n.rideIdMissing);
         }
         if (method == 'WALLET') {
           result = await _paymentService.payRideWallet(rideId: rideId);
@@ -326,14 +336,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (_cancelRequested) return;
       if (method == 'MIDTRANS') {
         final token = result.snapToken ?? '';
-        final redirectUrl = (result.redirectUrl ??
-                SessionManager.instance.getPendingRedirectUrl(
-                  result.membershipHistoryId ?? widget.membershipHistoryId ?? '',
-                ) ??
-                '')
-            .trim();
+        final redirectUrl =
+            (result.redirectUrl ??
+                    SessionManager.instance.getPendingRedirectUrl(
+                      result.membershipHistoryId ??
+                          widget.membershipHistoryId ??
+                          '',
+                    ) ??
+                    '')
+                .trim();
         if (widget.flow == PaymentFlow.membership) {
-          _pendingPaymentId = result.paymentId ??
+          _pendingPaymentId =
+              result.paymentId ??
               result.orderId ??
               result.membershipHistoryId ??
               widget.membershipHistoryId ??
@@ -350,25 +364,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (webUrl.isEmpty) {
           throw Exception(l10n.snapTokenMissing);
         }
-        _dismissLoadingIfVisible();
         if (!context.mounted) return;
-        final resultStatus = await Navigator.of(context).push(
-          appRoute(
-            PaymentWebViewScreen(
-              url: webUrl,
-              paymentId: _pendingPaymentId,
-            ),
-            direction: AxisDirection.left,
-          ),
-        );
-        if (!context.mounted) return;
-        if (resultStatus == PaymentWebViewResult.success) {
-          await _finalizePaymentSuccess();
+        if (!_midtransReady || _midtrans == null) {
+          _showMidtransNotReady(context);
           return;
         }
-        if (resultStatus == PaymentWebViewResult.failed) {
-          _finalizePaymentFailure();
-          return;
+        if (token.isEmpty) {
+          throw Exception(l10n.snapTokenMissing);
         }
         _showPaymentPending(context);
         return;
@@ -381,14 +383,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         debugPrint('payment success flow=${widget.flow} method=$method');
       }
       if (!context.mounted) return;
+      if (!context.mounted) return;
       // ignore: use_build_context_synchronously
       _navigateToDashboard(context);
     } catch (e) {
       if (!_cancelRequested) {
         if (kDebugMode) {
           debugPrint('payment error=$e');
-          debugPrint('payment failed flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
+          debugPrint(
+            'payment failed flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}',
+          );
         }
+        if (!context.mounted) return;
         if (!context.mounted) return;
         // ignore: use_build_context_synchronously
         _showPaymentError(context, e.toString());
@@ -427,7 +433,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _refreshDashboardState() async {
     try {
-      final customerId = SessionManager.instance.customerId ?? _resolveCustomerId();
+      final customerId =
+          SessionManager.instance.customerId ?? _resolveCustomerId();
       if (customerId.isEmpty) return;
       final data = await _emotorService.fetchDashboardRefresh(customerId);
       if (data == null) return;
@@ -440,7 +447,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         rideRange: data.rideRange,
       );
       final hasPackage =
-          (data.validUntil != null && data.validUntil!.isAfter(DateTime.now())) ||
+          (data.validUntil != null &&
+              data.validUntil!.isAfter(DateTime.now())) ||
           data.remainingSeconds > 0 ||
           data.packageName.trim().isNotEmpty;
       SessionManager.instance.setHasActivePackage(hasPackage);
@@ -462,7 +470,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return text.isEmpty ? null : text;
     }
 
-    final direct = read(profile['customerId']) ??
+    final direct =
+        read(profile['customerId']) ??
         read(profile['customer_id']) ??
         read(profile['id_customer']) ??
         read(profile['customer']);
@@ -470,7 +479,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     final customerMap = profile['Customer'] ?? profile['customer'];
     if (customerMap is Map<String, dynamic>) {
-      final nested = read(customerMap['id']) ??
+      final nested =
+          read(customerMap['id']) ??
           read(customerMap['id_customer']) ??
           read(customerMap['customer_id']);
       if (nested != null) return nested;
@@ -597,8 +607,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         apiBase.contains('sandbox') ||
         apiBase.contains('staging') ||
         apiBase.contains('dev');
-    final host =
-        isSandbox ? 'https://app.sandbox.midtrans.com' : 'https://app.midtrans.com';
+    final host = isSandbox
+        ? 'https://app.sandbox.midtrans.com'
+        : 'https://app.midtrans.com';
     return '$host/snap/v2/vtweb/$token';
   }
 
@@ -715,8 +726,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(seconds: 3));
         if (!mounted || _statusPollCancelled) break;
-        final status =
-            await _paymentService.checkPaymentStatus(paymentId: paymentId);
+        final status = await _paymentService.checkPaymentStatus(
+          paymentId: paymentId,
+        );
         if (status.isEmpty) continue;
         final normalized = status.toLowerCase();
         if (normalized == 'success' ||
@@ -758,8 +770,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _dismissLoadingIfVisible();
     if (widget.flow == PaymentFlow.membership) {
       await _refreshPostPaymentState();
-      final historyId =
-          _pendingPaymentId.isNotEmpty ? _pendingPaymentId : (widget.membershipHistoryId ?? '');
+      final historyId = _pendingPaymentId.isNotEmpty
+          ? _pendingPaymentId
+          : (widget.membershipHistoryId ?? '');
       if (historyId.isNotEmpty) {
         await SessionManager.instance.clearPendingSnapToken(historyId);
         await SessionManager.instance.clearPendingRedirectUrl(historyId);
@@ -779,7 +792,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _dismissLoadingIfVisible();
     _showPaymentFailed(context);
   }
-
 }
 
 class _PaymentOptionCard extends StatelessWidget {
@@ -801,10 +813,12 @@ class _PaymentOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        isSelected ? const Color(0xFF2C7BFE) : const Color(0xFFB8BDC7);
-    final textColor =
-        isSelected ? const Color(0xFF111827) : const Color(0xFF9AA0AA);
+    final borderColor = isSelected
+        ? const Color(0xFF2C7BFE)
+        : const Color(0xFFB8BDC7);
+    final textColor = isSelected
+        ? const Color(0xFF111827)
+        : const Color(0xFF9AA0AA);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -964,9 +978,7 @@ class PaymentConfirmDialog extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         child: Column(
@@ -1111,9 +1123,7 @@ class PaymentSuccessDialog extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         child: Column(
@@ -1195,9 +1205,7 @@ class PaymentFailedDialog extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         child: Column(

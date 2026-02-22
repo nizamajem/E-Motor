@@ -1,7 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/localization/app_localizations.dart';
-import 'package:flutter/foundation.dart';
 
 class TopupSnapResponse {
   TopupSnapResponse({
@@ -64,45 +63,13 @@ class TopupService {
       if (data is! Map<String, dynamic>) return null;
       return TopupSnapResponse.fromJson(data);
     } on ApiException catch (e) {
-      final message =
-          e.message.isNotEmpty ? e.message : AppLocalizations.current.topupFailed;
+      final message = e.message.isNotEmpty
+          ? e.message
+          : AppLocalizations.current.topupFailed;
+      e.message.isNotEmpty ? e.message : AppLocalizations.current.topupFailed;
       throw Exception(message);
     } catch (_) {
       throw Exception(AppLocalizations.current.topupFailed);
     }
-  }
-
-  Future<String> checkTopupStatus({required String orderId}) async {
-    if (orderId.isEmpty) return '';
-    try {
-      final json = await _client
-          .getJson(
-            '${ApiConfig.topupCheckStatusPath}/$orderId',
-            auth: true,
-          )
-          .timeout(_timeout);
-      final data = json['data'] is Map<String, dynamic>
-          ? json['data'] as Map<String, dynamic>
-          : json;
-      final status = _readString(
-        data,
-        ['status', 'transaction_status', 'payment_status'],
-      );
-      if (status == null || status.isEmpty) return '';
-      return status.trim().toLowerCase();
-    } on ApiException catch (e) {
-      if (e.statusCode == 404) return '';
-      rethrow;
-    }
-  }
-
-  String? _readString(Map<String, dynamic> data, List<String> keys) {
-    for (final key in keys) {
-      final value = data[key];
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    }
-    return null;
   }
 }
