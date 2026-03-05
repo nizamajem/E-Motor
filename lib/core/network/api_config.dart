@@ -52,6 +52,8 @@ class ApiConfig {
   static const String payRideWalletPath = '/customer-payments/pay-ride';
   static const String payRideMidtransPath =
       '/customer-payments/pay-ride-midtrans';
+  static const String checkPaymentStatusPath =
+      '/customer-payments/check-payment-status';
   static const String buyMembershipPath = '/membership/buy-emotor';
   static const String checkMembershipPath = '/customers/check-membership';
   static const String topupSnapPath = '/customer-topups/snap';

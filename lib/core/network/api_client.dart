@@ -45,6 +45,33 @@ class ApiClient {
     return _sendWithRefresh(request, authRequested: auth);
   }
 
+  Future<String> getText(
+    String path, {
+    Map<String, String>? query,
+    bool auth = false,
+  }) async {
+    Future<http.Response> request() => _client.get(
+          _buildUri(path, query),
+          headers: _headers(withAuth: auth),
+        );
+    var response = await request();
+    if (auth && _shouldRetryWithRefresh(response)) {
+      final refreshed = await _refreshToken();
+      if (refreshed) {
+        response = await request();
+      }
+    }
+    final status = response.statusCode;
+    if (status >= 200 && status < 300) {
+      return response.body.trim();
+    }
+    final raw = response.body.isEmpty ? '' : response.body;
+    throw ApiException(
+      raw.length > 160 ? raw.substring(0, 160) : raw,
+      statusCode: status,
+    );
+  }
+
   Future<Map<String, dynamic>> postJson(
     String path, {
     Map<String, dynamic>? body,

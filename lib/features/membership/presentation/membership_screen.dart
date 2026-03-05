@@ -63,11 +63,30 @@ class _MembershipScreenState extends State<MembershipScreen> {
         SessionManager.instance.membershipName ?? l10n.packageDefault;
     final activeExpiresAt = SessionManager.instance.membershipExpiresAt;
     String? activeEmotor = SessionManager.instance.dashboardEmotorNumber;
+    final emotorProfile = SessionManager.instance.emotorProfile;
+    final emotorMap = SessionManager.instance.userProfile?['emotor'];
+    String? readMapName(Map<String, dynamic>? map) {
+      if (map == null) return null;
+      return map['modelBikeId_model']?.toString().trim() ??
+          map['model_name']?.toString().trim() ??
+          map['model']?.toString().trim() ??
+          map['name']?.toString().trim();
+    }
+    String? readMapPlate(Map<String, dynamic>? map) {
+      if (map == null) return null;
+      return map['vehicle_number']?.toString().trim() ??
+          map['vehicleNumber']?.toString().trim() ??
+          map['plate']?.toString().trim() ??
+          map['license_plate']?.toString().trim();
+    }
+    final emotorName = readMapName(emotorProfile) ??
+        (emotorMap is Map<String, dynamic> ? readMapName(emotorMap) : null);
+    final emotorPlate = readMapPlate(emotorProfile) ??
+        (emotorMap is Map<String, dynamic> ? readMapPlate(emotorMap) : null);
     if (activeEmotor == null || activeEmotor.isEmpty) {
-      final emotorMap = SessionManager.instance.userProfile?['emotor'];
-      if (emotorMap is Map<String, dynamic>) {
-        activeEmotor = emotorMap['vehicle_number']?.toString();
-      }
+      activeEmotor = (emotorName != null && emotorName.isNotEmpty)
+          ? emotorName
+          : emotorPlate;
     }
     final remainingSeconds = SessionManager.instance.getRemainingSecondsNow();
     final hasActive = (activeExpiresAt != null &&
