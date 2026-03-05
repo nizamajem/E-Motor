@@ -9,6 +9,8 @@ class PaymentResult {
     this.redirectUrl,
     this.snapToken,
     this.membershipHistoryId,
+    this.paymentId,
+    this.orderId,
   });
 
   final bool isSuccess;
@@ -16,6 +18,8 @@ class PaymentResult {
   final String? redirectUrl;
   final String? snapToken;
   final String? membershipHistoryId;
+  final String? paymentId;
+  final String? orderId;
 }
 
 class PaymentService {
@@ -111,6 +115,14 @@ class PaymentService {
         historyMap ?? data,
         ['id', 'membershipHistoryId', 'membership_history_id'],
       ),
+      paymentId: _extractString(
+        paymentMap,
+        ['paymentId', 'payment_id', 'midtransPaymentId'],
+      ),
+      orderId: _extractString(
+        paymentMap,
+        ['orderId', 'order_id', 'midtransOrderId'],
+      ),
     );
   }
 
@@ -124,6 +136,44 @@ class PaymentService {
       return data.isNotEmpty;
     }
     return false;
+  }
+
+  Future<String> checkPaymentStatus({required String paymentId}) async {
+    if (paymentId.isEmpty) return '';
+    try {
+      final json = await _client
+          .getJson(
+            '${ApiConfig.checkPaymentStatusPath}/$paymentId',
+            auth: true,
+          )
+          .timeout(_timeout);
+      final data = _unwrap(json);
+      final status = _extractString(
+        data,
+        [
+          'payment_status',
+          'paymentStatus',
+          'status',
+          'transaction_status',
+          'transactionStatus',
+        ],
+      );
+      if (status != null && status.isNotEmpty) {
+        return status.trim().toLowerCase();
+      }
+      return '';
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return '';
+      rethrow;
+    } on FormatException {
+      final res = await _client
+          .getText(
+            '${ApiConfig.checkPaymentStatusPath}/$paymentId',
+            auth: true,
+          )
+          .timeout(_timeout);
+      return res.trim().toLowerCase();
+    }
   }
 
   String? _extractString(Map<String, dynamic> data, List<String> keys) {

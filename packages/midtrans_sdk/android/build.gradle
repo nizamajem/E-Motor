@@ -1,0 +1,53 @@
+group 'dev.tomykho.midtrans_sdk'
+version '1.0'
+
+buildscript {
+    ext {
+        agp_version = '8.13.0'
+        uikit_version = '2.5.0'
+    }
+    repositories {
+        mavenCentral()
+        google()
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:$agp_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        maven { url 'https://jitpack.io' }
+        mavenCentral()
+        google()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace 'dev.tomykho.midtrans_sdk'
+
+    compileSdk = 36
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk = 21
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation "com.midtrans:uikit:$uikit_version-SANDBOX"
+    implementation 'androidx.core:core-ktx:1.17.0'
+    releaseImplementation "com.midtrans:uikit:$uikit_version"
+}

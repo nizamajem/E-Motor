@@ -12,6 +12,7 @@ import '../../../components/app_motion.dart';
 import '../../shell/main_shell.dart';
 import '../../../components/bottom_nav.dart';
 import '../data/payment_service.dart';
+import 'payment_webview_screen.dart';
 
 enum PaymentFlow { membership, ride }
 
@@ -45,6 +46,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
   int _selectedIndex = 0;
   bool _isProcessing = false;
   bool _cancelRequested = false;
+  bool _pendingCheckCancelled = false;
+  bool _pendingCheckRunning = false;
+  bool _paymentFinalized = false;
+  bool _statusPollCancelled = false;
+  bool _statusPollRunning = false;
+  bool _snapUiActive = false;
+  bool _deferredSuccess = false;
+  bool _deferredFailure = false;
+  String _pendingPaymentId = '';
   final PaymentService _paymentService = PaymentService();
   MidtransSDK? _midtrans;
   bool _midtransReady = false;
@@ -63,6 +73,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   void dispose() {
+    _pendingCheckCancelled = true;
+    _statusPollCancelled = true;
     _midtrans?.removeTransactionFinishedCallback();
     super.dispose();
   }
@@ -231,6 +243,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (_isProcessing) return;
     final l10n = AppLocalizations.of(context);
     _cancelRequested = false;
+    _paymentFinalized = false;
+    _deferredSuccess = false;
+    _deferredFailure = false;
     if (kDebugMode) {
       debugPrint('payment start flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
     }
@@ -318,6 +333,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (_cancelRequested) return;
       if (method == 'MIDTRANS') {
         final token = result.snapToken ?? '';
+        final redirectUrl = (result.redirectUrl ??
+                SessionManager.instance.getPendingRedirectUrl(
+                  result.membershipHistoryId ?? widget.membershipHistoryId ?? '',
+                ) ??
+                '')
+            .trim();
+        if (widget.flow == PaymentFlow.membership) {
+          _pendingPaymentId = result.paymentId ??
+              result.orderId ??
+              result.membershipHistoryId ??
+              widget.membershipHistoryId ??
+              '';
+          if (_pendingPaymentId.isNotEmpty && redirectUrl.isEmpty) {
+            _startPaymentStatusPolling(_pendingPaymentId);
+          }
+        }
         if (kDebugMode) {
           debugPrint('midtrans snapToken length=${token.length}');
           debugPrint('midtrans redirectUrl=${result.redirectUrl}');
@@ -330,10 +361,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
           _showMidtransNotReady(context);
           return;
         }
+        if (redirectUrl.isNotEmpty) {
+          final resultStatus = await Navigator.of(context).push(
+            appRoute(
+              PaymentWebViewScreen(
+                url: redirectUrl,
+                paymentId: _pendingPaymentId,
+              ),
+              direction: AxisDirection.left,
+            ),
+          );
+          if (!context.mounted) return;
+          if (resultStatus == PaymentWebViewResult.success) {
+            await _finalizePaymentSuccess();
+            return;
+          }
+          if (resultStatus == PaymentWebViewResult.failed) {
+            _finalizePaymentFailure();
+            return;
+          }
+          _showPaymentPending(context);
+          return;
+        }
         if (token.isEmpty) {
           throw Exception(l10n.snapTokenMissing);
         }
+        _snapUiActive = true;
         await _midtrans!.startPaymentUiFlow(token: token);
+        _snapUiActive = false;
+        if (!context.mounted) return;
+        if (_deferredSuccess) {
+          _deferredSuccess = false;
+          _finalizePaymentSuccess();
+          return;
+        }
+        if (_deferredFailure) {
+          _deferredFailure = false;
+          _finalizePaymentFailure();
+          return;
+        }
         return;
       }
 
@@ -644,20 +710,283 @@ class _PaymentScreenState extends State<PaymentScreen> {
         status == 'success' || status == 'settlement' || status == 'capture';
     final isPending = status == 'pending';
     if (isSuccess) {
-      if (widget.flow == PaymentFlow.membership) {
-        SessionManager.instance.setHasActivePackage(true);
-        final historyId = widget.membershipHistoryId ?? '';
-        if (historyId.isNotEmpty) {
-          SessionManager.instance.clearPendingSnapToken(historyId);
-          SessionManager.instance.clearPendingRedirectUrl(historyId);
-        }
-      }
-      _navigateToDashboard(context);
+      _finalizePaymentSuccess();
       return;
     }
     if (isPending) {
+      if (widget.flow == PaymentFlow.membership) {
+        _startPendingMembershipCheck();
+      } else {
+        _showPaymentPending(context);
+      }
       return;
     }
+    _finalizePaymentFailure();
+  }
+
+  void _showPaymentSuccess(BuildContext context) {
+    showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return PaymentSuccessDialog(
+          onClose: () {
+            Navigator.of(dialogContext).pop();
+            _navigateToDashboard(context);
+          },
+          onContinue: () {
+            Navigator.of(dialogContext).pop();
+            _navigateToDashboard(context);
+          },
+        );
+      },
+    );
+  }
+
+  void _showPaymentPending(BuildContext context) {
+    showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final l10n = AppLocalizations.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.paymentPending,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.paymentPendingBody,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7B8190),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.ok,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _startPendingMembershipCheck() async {
+    if (!mounted || _pendingCheckRunning || _statusPollRunning) return;
+    _pendingCheckRunning = true;
+    _pendingCheckCancelled = false;
+    var dialogOpen = true;
+    showLoadingDialog(
+      context,
+      message: AppLocalizations.of(context).paymentProcessing,
+      showClose: true,
+      onCancel: () {
+        _pendingCheckCancelled = true;
+        dialogOpen = false;
+      },
+    );
+    final deadline = DateTime.now().add(const Duration(minutes: 2));
+    void closeDialog() {
+      if (!dialogOpen) return;
+      dialogOpen = false;
+      if (mounted) {
+        hideLoadingDialog(context);
+      }
+    }
+    try {
+      while (mounted &&
+          !_pendingCheckCancelled &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        if (!mounted || _pendingCheckCancelled) break;
+        if (_pendingPaymentId.isNotEmpty) {
+          try {
+            final status = await _paymentService.checkPaymentStatus(
+              paymentId: _pendingPaymentId,
+            );
+            if (status.isNotEmpty) {
+              if (status == 'success' ||
+                  status == 'settlement' ||
+                  status == 'capture') {
+                closeDialog();
+                if (mounted) {
+                  _finalizePaymentSuccess();
+                }
+                return;
+              }
+              if (status == 'failed' ||
+                  status == 'failure' ||
+                  status == 'deny' ||
+                  status == 'cancel' ||
+                  status == 'expire') {
+                closeDialog();
+                if (mounted) {
+                  _finalizePaymentFailure();
+                }
+                return;
+              }
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('payment status check error: $e');
+            }
+          }
+        }
+        final active = await _paymentService.refreshMembershipStatus();
+        SessionManager.instance.setHasActivePackage(active);
+        if (active) {
+          closeDialog();
+          if (mounted) _finalizePaymentSuccess();
+          return;
+        }
+      }
+      if (mounted && !_pendingCheckCancelled) {
+        closeDialog();
+        _showPaymentPending(context);
+      }
+    } finally {
+      closeDialog();
+      _pendingCheckRunning = false;
+    }
+  }
+
+  Future<void> _startPaymentStatusPolling(String paymentId) async {
+    if (!mounted || _statusPollRunning) return;
+    _statusPollRunning = true;
+    _statusPollCancelled = false;
+    final deadline = DateTime.now().add(const Duration(minutes: 3));
+    try {
+      while (mounted &&
+          !_statusPollCancelled &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        if (!mounted || _statusPollCancelled) break;
+        final status =
+            await _paymentService.checkPaymentStatus(paymentId: paymentId);
+        if (status.isEmpty) continue;
+        final normalized = status.toLowerCase();
+        if (normalized == 'success' ||
+            normalized == 'settlement' ||
+            normalized == 'capture') {
+          _handlePollSuccess();
+          return;
+        }
+        if (normalized == 'failed' ||
+            normalized == 'failure' ||
+            normalized == 'deny' ||
+            normalized == 'cancel' ||
+            normalized == 'expire') {
+          _handlePollFailure();
+          return;
+        }
+      }
+    } catch (_) {
+      // Ignore polling errors; let SDK callback handle UI.
+    } finally {
+      _statusPollRunning = false;
+    }
+  }
+
+  void _handlePollSuccess() {
+    if (_paymentFinalized) return;
+    if (_snapUiActive) {
+      debugPrint('poll success: closing midtrans ui');
+      _midtrans?.closePaymentUiFlow();
+      _deferredSuccess = true;
+      return;
+    }
+    _finalizePaymentSuccess();
+  }
+
+  void _handlePollFailure() {
+    if (_paymentFinalized) return;
+    if (_snapUiActive) {
+      debugPrint('poll failure: closing midtrans ui');
+      _midtrans?.closePaymentUiFlow();
+      _deferredFailure = true;
+      return;
+    }
+    _finalizePaymentFailure();
+  }
+
+  Future<void> _finalizePaymentSuccess() async {
+    if (_paymentFinalized || !mounted) return;
+    _paymentFinalized = true;
+    _statusPollCancelled = true;
+    if (widget.flow == PaymentFlow.membership) {
+      await _refreshMembershipStatus();
+      SessionManager.instance.setHasActivePackage(true);
+      final historyId =
+          _pendingPaymentId.isNotEmpty ? _pendingPaymentId : (widget.membershipHistoryId ?? '');
+      if (historyId.isNotEmpty) {
+        SessionManager.instance.clearPendingSnapToken(historyId);
+        SessionManager.instance.clearPendingRedirectUrl(historyId);
+      }
+    }
+    if (mounted) {
+      _showPaymentSuccess(context);
+    }
+  }
+
+  void _finalizePaymentFailure() {
+    if (_paymentFinalized || !mounted) return;
+    _paymentFinalized = true;
+    _statusPollCancelled = true;
     _showPaymentFailed(context);
   }
 
