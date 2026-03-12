@@ -60,6 +60,7 @@ class ApiConfig {
   static const String buyMembershipPath = '/membership/buy-emotor';
   static const String checkMembershipPath = '/customers/check-membership';
   static const String topupSnapPath = '/customer-topups/snap';
+  static const String rechargesPath = '/recharges';
   static const String userByIdPath = '/users';
 
   /// Midtrans SDK configuration (set via --dart-define).
