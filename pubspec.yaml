@@ -43,8 +43,6 @@ dependencies:
   connectivity_plus: ^7.0.0
   flutter_secure_storage: ^9.2.2
   image_picker: ^1.1.2
-  midtrans_sdk:
-    path: packages/midtrans_sdk
   url_launcher: ^6.2.6
   http_parser: ^4.0.2
   webview_flutter: ^4.7.0

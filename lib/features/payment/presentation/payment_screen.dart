@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:midtrans_sdk/midtrans_sdk.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/navigation/app_route.dart';
@@ -46,18 +45,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   int _selectedIndex = 0;
   bool _isProcessing = false;
   bool _cancelRequested = false;
-  bool _pendingCheckCancelled = false;
-  bool _pendingCheckRunning = false;
   bool _paymentFinalized = false;
   bool _statusPollCancelled = false;
   bool _statusPollRunning = false;
-  bool _snapUiActive = false;
-  bool _deferredSuccess = false;
-  bool _deferredFailure = false;
   String _pendingPaymentId = '';
   final PaymentService _paymentService = PaymentService();
-  MidtransSDK? _midtrans;
-  bool _midtransReady = false;
 
   @override
   void initState() {
@@ -68,14 +60,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (widget.lockMidtrans) {
       _selectedIndex = 1;
     }
-    _initMidtrans();
   }
 
   @override
   void dispose() {
-    _pendingCheckCancelled = true;
     _statusPollCancelled = true;
-    _midtrans?.removeTransactionFinishedCallback();
     super.dispose();
   }
 
@@ -244,8 +233,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final l10n = AppLocalizations.of(context);
     _cancelRequested = false;
     _paymentFinalized = false;
-    _deferredSuccess = false;
-    _deferredFailure = false;
     if (kDebugMode) {
       debugPrint('payment start flow=${widget.flow} method=${_selectedIndex == 0 ? 'WALLET' : 'MIDTRANS'}');
     }
@@ -353,53 +340,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
           debugPrint('midtrans snapToken length=${token.length}');
           debugPrint('midtrans redirectUrl=${result.redirectUrl}');
         }
-        if (!_midtransReady || _midtrans == null) {
-          await _initMidtrans();
-        }
-        if (!context.mounted) return;
-        if (!_midtransReady || _midtrans == null) {
-          _showMidtransNotReady(context);
-          return;
-        }
-        if (redirectUrl.isNotEmpty) {
-          final resultStatus = await Navigator.of(context).push(
-            appRoute(
-              PaymentWebViewScreen(
-                url: redirectUrl,
-                paymentId: _pendingPaymentId,
-              ),
-              direction: AxisDirection.left,
-            ),
-          );
-          if (!context.mounted) return;
-          if (resultStatus == PaymentWebViewResult.success) {
-            await _finalizePaymentSuccess();
-            return;
-          }
-          if (resultStatus == PaymentWebViewResult.failed) {
-            _finalizePaymentFailure();
-            return;
-          }
-          _showPaymentPending(context);
-          return;
-        }
-        if (token.isEmpty) {
+        final webUrl = _resolveMidtransUrl(redirectUrl, token);
+        if (webUrl.isEmpty) {
           throw Exception(l10n.snapTokenMissing);
         }
-        _snapUiActive = true;
-        await _midtrans!.startPaymentUiFlow(token: token);
-        _snapUiActive = false;
         if (!context.mounted) return;
-        if (_deferredSuccess) {
-          _deferredSuccess = false;
-          _finalizePaymentSuccess();
+        final resultStatus = await Navigator.of(context).push(
+          appRoute(
+            PaymentWebViewScreen(
+              url: webUrl,
+              paymentId: _pendingPaymentId,
+            ),
+            direction: AxisDirection.left,
+          ),
+        );
+        if (!context.mounted) return;
+        if (resultStatus == PaymentWebViewResult.success) {
+          await _finalizePaymentSuccess();
           return;
         }
-        if (_deferredFailure) {
-          _deferredFailure = false;
+        if (resultStatus == PaymentWebViewResult.failed) {
           _finalizePaymentFailure();
           return;
         }
+        _showPaymentPending(context);
         return;
       }
 
@@ -569,159 +533,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  void _showMidtransNotReady(BuildContext context) {
-    showAppDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final l10n = AppLocalizations.of(dialogContext);
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: SizedBox(
-                    height: 28,
-                    width: 28,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: const Icon(Icons.close),
-                      iconSize: 18,
-                      color: const Color(0xFF111827),
-                      splashRadius: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  l10n.paymentFailed,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.midtransNotReady,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF7B8190),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2C7BFE),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      l10n.ok,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12.8,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _initMidtrans() async {
-    final merchantUrl =
-        _normalizeMerchantUrl(ApiConfig.midtransMerchantBaseUrl);
-    if (ApiConfig.midtransClientKey.isEmpty || merchantUrl.isEmpty) {
-      return;
-    }
-    try {
-      if (kDebugMode) {
-        debugPrint('midtrans init clientKeyLen=${ApiConfig.midtransClientKey.length}');
-        debugPrint('midtrans merchantUrl=$merchantUrl');
-      }
-      final midtrans = await MidtransSDK.init(
-        config: MidtransConfig(
-          clientKey: ApiConfig.midtransClientKey,
-          merchantBaseUrl: merchantUrl,
-          enableLog: kDebugMode,
-          colorTheme: ColorTheme(
-            colorPrimary: const Color(0xFF2C7BFE),
-            colorPrimaryDark: const Color(0xFF2C7BFE),
-            colorSecondary: const Color(0xFF2C7BFE),
-          ),
-        ),
-      );
-      midtrans.setTransactionFinishedCallback(_handleMidtransResult);
-      if (mounted) {
-        setState(() {
-          _midtrans = midtrans;
-          _midtransReady = true;
-        });
-      } else {
-        _midtrans = midtrans;
-        _midtransReady = true;
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _midtransReady = false);
-      }
-    }
-  }
-
-  String _normalizeMerchantUrl(String value) {
-    var url = value.trim();
-    if (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
-    }
-    if (url.endsWith('/api')) {
-      url = url.substring(0, url.length - 4);
-    }
-    return url;
-  }
-
-  void _handleMidtransResult(TransactionResult result) {
-    if (!mounted) return;
-    final status = result.status.toLowerCase();
-    final isSuccess =
-        status == 'success' || status == 'settlement' || status == 'capture';
-    final isPending = status == 'pending';
-    if (isSuccess) {
-      _finalizePaymentSuccess();
-      return;
-    }
-    if (isPending) {
-      if (widget.flow == PaymentFlow.membership) {
-        _startPendingMembershipCheck();
-      } else {
-        _showPaymentPending(context);
-      }
-      return;
-    }
-    _finalizePaymentFailure();
+  String _resolveMidtransUrl(String redirectUrl, String token) {
+    final cleaned = redirectUrl.trim();
+    if (cleaned.isNotEmpty) return cleaned;
+    if (token.isEmpty) return '';
+    final base = ApiConfig.midtransMerchantBaseUrl.toLowerCase();
+    final apiBase = ApiConfig.baseUrl.toLowerCase();
+    final isSandbox =
+        base.contains('sandbox') ||
+        base.contains('staging') ||
+        base.contains('dev') ||
+        apiBase.contains('sandbox') ||
+        apiBase.contains('staging') ||
+        apiBase.contains('dev');
+    final host =
+        isSandbox ? 'https://app.sandbox.midtrans.com' : 'https://app.midtrans.com';
+    return '$host/snap/v2/vtweb/$token';
   }
 
   void _showPaymentSuccess(BuildContext context) {
@@ -826,85 +653,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Future<void> _startPendingMembershipCheck() async {
-    if (!mounted || _pendingCheckRunning || _statusPollRunning) return;
-    _pendingCheckRunning = true;
-    _pendingCheckCancelled = false;
-    var dialogOpen = true;
-    showLoadingDialog(
-      context,
-      message: AppLocalizations.of(context).paymentProcessing,
-      showClose: true,
-      onCancel: () {
-        _pendingCheckCancelled = true;
-        dialogOpen = false;
-      },
-    );
-    final deadline = DateTime.now().add(const Duration(minutes: 2));
-    void closeDialog() {
-      if (!dialogOpen) return;
-      dialogOpen = false;
-      if (mounted) {
-        hideLoadingDialog(context);
-      }
-    }
-    try {
-      while (mounted &&
-          !_pendingCheckCancelled &&
-          DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(seconds: 5));
-        if (!mounted || _pendingCheckCancelled) break;
-        if (_pendingPaymentId.isNotEmpty) {
-          try {
-            final status = await _paymentService.checkPaymentStatus(
-              paymentId: _pendingPaymentId,
-            );
-            if (status.isNotEmpty) {
-              if (status == 'success' ||
-                  status == 'settlement' ||
-                  status == 'capture') {
-                closeDialog();
-                if (mounted) {
-                  _finalizePaymentSuccess();
-                }
-                return;
-              }
-              if (status == 'failed' ||
-                  status == 'failure' ||
-                  status == 'deny' ||
-                  status == 'cancel' ||
-                  status == 'expire') {
-                closeDialog();
-                if (mounted) {
-                  _finalizePaymentFailure();
-                }
-                return;
-              }
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint('payment status check error: $e');
-            }
-          }
-        }
-        final active = await _paymentService.refreshMembershipStatus();
-        SessionManager.instance.setHasActivePackage(active);
-        if (active) {
-          closeDialog();
-          if (mounted) _finalizePaymentSuccess();
-          return;
-        }
-      }
-      if (mounted && !_pendingCheckCancelled) {
-        closeDialog();
-        _showPaymentPending(context);
-      }
-    } finally {
-      closeDialog();
-      _pendingCheckRunning = false;
-    }
-  }
-
   Future<void> _startPaymentStatusPolling(String paymentId) async {
     if (!mounted || _statusPollRunning) return;
     _statusPollRunning = true;
@@ -944,23 +692,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _handlePollSuccess() {
     if (_paymentFinalized) return;
-    if (_snapUiActive) {
-      debugPrint('poll success: closing midtrans ui');
-      _midtrans?.closePaymentUiFlow();
-      _deferredSuccess = true;
-      return;
-    }
     _finalizePaymentSuccess();
   }
 
   void _handlePollFailure() {
     if (_paymentFinalized) return;
-    if (_snapUiActive) {
-      debugPrint('poll failure: closing midtrans ui');
-      _midtrans?.closePaymentUiFlow();
-      _deferredFailure = true;
-      return;
-    }
     _finalizePaymentFailure();
   }
 
