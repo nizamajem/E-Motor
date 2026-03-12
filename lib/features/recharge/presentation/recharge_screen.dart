@@ -20,17 +20,7 @@ class RechargeScreen extends StatefulWidget {
 }
 
 class _RechargeScreenState extends State<RechargeScreen> {
-  static const List<_RechargeOption> _defaultOptions = [
-    _RechargeOption(amount: 10000, bonus: 1000),
-    _RechargeOption(amount: 15000, bonus: 1500),
-    _RechargeOption(amount: 20000, bonus: 2000),
-    _RechargeOption(amount: 30000, bonus: 3000),
-    _RechargeOption(amount: 50000, bonus: 5000),
-    _RechargeOption(amount: 100000, bonus: 10000),
-  ];
-
-  late final List<_RechargeOption> _options = [
-    ..._defaultOptions,
+  final List<_RechargeOption> _options = [
     const _RechargeOption.custom(),
   ];
 
@@ -200,11 +190,16 @@ class _RechargeScreenState extends State<RechargeScreen> {
   Future<void> _loadRechargeOptions() async {
     setState(() => _optionsLoading = true);
     try {
-      final tenantId = _resolveTenantId();
-      final merchantId = _resolveMerchantId();
-      if ((tenantId == null || tenantId.isEmpty) &&
-          (merchantId == null || merchantId.isEmpty)) {
-        return;
+      String? tenantId;
+      String? merchantId;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        tenantId = _resolveTenantId();
+        merchantId = _resolveMerchantId();
+        if ((tenantId != null && tenantId.isNotEmpty) ||
+            (merchantId != null && merchantId.isNotEmpty)) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
       }
       final items = await _rechargeService.fetchRechargeOptions(
         tenantId: tenantId,
@@ -213,7 +208,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
       final mapped = items
           .map(_mapRechargeToOption)
           .where((option) => option.amount > 0)
-          .toList();
+          .toList()
+        ..sort((a, b) => a.amount.compareTo(b.amount));
       if (mapped.isNotEmpty && mounted) {
         setState(() {
           _options
@@ -237,13 +233,20 @@ class _RechargeScreenState extends State<RechargeScreen> {
   _RechargeOption _mapRechargeToOption(RechargeOptionDto dto) {
     final amount = _parseDecimalInt(dto.amount);
     final bonus = _parseDecimalInt(dto.giftNumber);
-    return _RechargeOption(amount: amount, bonus: bonus);
+    return _RechargeOption(
+      amount: amount,
+      bonus: bonus,
+      giftType: dto.giftType,
+    );
   }
 
   int _parseDecimalInt(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleaned.isEmpty) return 0;
-    return int.tryParse(cleaned) ?? 0;
+    final cleaned = value.replaceAll(',', '.');
+    final parsed = double.tryParse(cleaned);
+    if (parsed != null) return parsed.round();
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return 0;
+    return int.tryParse(digits) ?? 0;
   }
 
   String? _resolveTenantId() {
@@ -677,16 +680,19 @@ class _RechargeOption {
   const _RechargeOption({
     required this.amount,
     required this.bonus,
+    this.giftType = '',
     this.isCustom = false,
   });
 
   const _RechargeOption.custom()
       : amount = 0,
         bonus = 0,
+        giftType = '',
         isCustom = true;
 
   final int amount;
   final int bonus;
+  final String giftType;
   final bool isCustom;
 }
 
@@ -716,12 +722,15 @@ class _RechargeOptionCard extends StatelessWidget {
         isSelected ? Colors.white : const Color(0xFF9AA0AA);
     final l10n = AppLocalizations.of(context);
     final isCustom = option.isCustom;
+    final isPoints = option.giftType.toLowerCase() == 'points';
     final title = isCustom ? l10n.rechargeCustom : _formatRupiah(option.amount);
     final bonusText = isCustom
         ? (customAmount > 0
             ? _formatRupiah(customAmount)
             : l10n.rechargeCustomHint)
-        : '${l10n.bonus} ${_formatRupiah(option.bonus)}';
+        : isPoints
+            ? '${option.bonus} ${l10n.points}'
+            : '${l10n.bonus} ${_formatRupiah(option.bonus)}';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
