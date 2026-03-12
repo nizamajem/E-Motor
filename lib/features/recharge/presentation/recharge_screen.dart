@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/localization/app_localizations.dart';
@@ -8,6 +9,7 @@ import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/navigation/app_route.dart';
 import '../data/topup_service.dart';
+import '../data/recharge_service.dart';
 import '../../profile/data/user_service.dart';
 import '../../payment/presentation/payment_webview_screen.dart';
 class RechargeScreen extends StatefulWidget {
@@ -18,7 +20,7 @@ class RechargeScreen extends StatefulWidget {
 }
 
 class _RechargeScreenState extends State<RechargeScreen> {
-  final List<_RechargeOption> _options = const [
+  static const List<_RechargeOption> _defaultOptions = [
     _RechargeOption(amount: 10000, bonus: 1000),
     _RechargeOption(amount: 15000, bonus: 1500),
     _RechargeOption(amount: 20000, bonus: 2000),
@@ -27,14 +29,30 @@ class _RechargeScreenState extends State<RechargeScreen> {
     _RechargeOption(amount: 100000, bonus: 10000),
   ];
 
+  late final List<_RechargeOption> _options = [
+    ..._defaultOptions,
+    const _RechargeOption.custom(),
+  ];
+
   int _selectedIndex = 0;
   bool _isSubmitting = false;
+  bool _optionsLoading = true;
+  int _customAmount = 0;
   final TopupService _topupService = TopupService();
+  final RechargeService _rechargeService = RechargeService();
   final UserService _userService = UserService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRechargeOptions();
+  }
 
   @override
   Widget build(BuildContext context) {
     final selected = _options[_selectedIndex];
+    final displayAmount =
+        selected.isCustom ? _customAmount : selected.amount;
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Colors.white,
@@ -96,7 +114,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          _formatRupiah(selected.amount),
+                          _formatRupiah(displayAmount),
                           style: GoogleFonts.poppins(
                             fontSize: 21,
                             fontWeight: FontWeight.w700,
@@ -106,27 +124,34 @@ class _RechargeScreenState extends State<RechargeScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _options.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        mainAxisExtent: 76,
+                    if (_optionsLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: CircularProgressIndicator(),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _options.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          mainAxisExtent: 76,
+                        ),
+                        itemBuilder: (context, index) {
+                          final option = _options[index];
+                          final isSelected = index == _selectedIndex;
+                          return _RechargeOptionCard(
+                            option: option,
+                            customAmount: _customAmount,
+                            isSelected: isSelected,
+                            onTap: () => _handleOptionTap(index, option),
+                          );
+                        },
                       ),
-                      itemBuilder: (context, index) {
-                        final option = _options[index];
-                        final isSelected = index == _selectedIndex;
-                        return _RechargeOptionCard(
-                          option: option,
-                          isSelected: isSelected,
-                          onTap: () => setState(() => _selectedIndex = index),
-                        );
-                      },
-                    ),
                   ],
                 ),
               ),
@@ -172,6 +197,228 @@ class _RechargeScreenState extends State<RechargeScreen> {
     );
   }
 
+  Future<void> _loadRechargeOptions() async {
+    setState(() => _optionsLoading = true);
+    try {
+      final tenantId = _resolveTenantId();
+      final merchantId = _resolveMerchantId();
+      if ((tenantId == null || tenantId.isEmpty) &&
+          (merchantId == null || merchantId.isEmpty)) {
+        return;
+      }
+      final items = await _rechargeService.fetchRechargeOptions(
+        tenantId: tenantId,
+        merchantId: merchantId,
+      );
+      final mapped = items
+          .map(_mapRechargeToOption)
+          .where((option) => option.amount > 0)
+          .toList();
+      if (mapped.isNotEmpty && mounted) {
+        setState(() {
+          _options
+            ..clear()
+            ..addAll(mapped)
+            ..add(const _RechargeOption.custom());
+          if (_selectedIndex >= _options.length) {
+            _selectedIndex = 0;
+          }
+        });
+      }
+    } catch (_) {
+      // Keep default options on failure.
+    } finally {
+      if (mounted) {
+        setState(() => _optionsLoading = false);
+      }
+    }
+  }
+
+  _RechargeOption _mapRechargeToOption(RechargeOptionDto dto) {
+    final amount = _parseDecimalInt(dto.amount);
+    final bonus = _parseDecimalInt(dto.giftNumber);
+    return _RechargeOption(amount: amount, bonus: bonus);
+  }
+
+  int _parseDecimalInt(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleaned.isEmpty) return 0;
+    return int.tryParse(cleaned) ?? 0;
+  }
+
+  String? _resolveTenantId() {
+    final profile = SessionManager.instance.userProfile;
+    String? read(dynamic value) {
+      if (value == null) return null;
+      final text = value.toString().trim();
+      return text.isEmpty ? null : text;
+    }
+
+    String? readFromMap(Map<String, dynamic>? map, List<String> keys) {
+      if (map == null) return null;
+      for (final key in keys) {
+        final value = read(map[key]);
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    final direct = readFromMap(profile, ['tenantId', 'tenant_id', 'id_tenant']);
+    if (direct != null) return direct;
+
+    final tenantAdmin = profile?['tenantAdmin'] ??
+        profile?['tenant_admin'] ??
+        profile?['TenantAdmin'] ??
+        profile?['tenantAdminProfile'] ??
+        profile?['tenant_admin_profile'];
+    if (tenantAdmin is Map<String, dynamic>) {
+      final fromAdmin = readFromMap(
+        tenantAdmin,
+        ['tenantId', 'tenant_id', 'id_tenant', 'id'],
+      );
+      if (fromAdmin != null) return fromAdmin;
+      final nestedTenant = tenantAdmin['tenant'] ?? tenantAdmin['Tenant'];
+      if (nestedTenant is Map<String, dynamic>) {
+        final fromTenant = readFromMap(
+          nestedTenant,
+          ['id', 'tenantId', 'tenant_id', 'id_tenant'],
+        );
+        if (fromTenant != null) return fromTenant;
+      }
+    }
+
+    final tenant = profile?['tenant'] ?? profile?['Tenant'];
+    if (tenant is Map<String, dynamic>) {
+      final fromTenant = readFromMap(
+        tenant,
+        ['id', 'tenantId', 'tenant_id', 'id_tenant'],
+      );
+      if (fromTenant != null) return fromTenant;
+    }
+
+    return null;
+  }
+
+  String? _resolveMerchantId() {
+    final profile = SessionManager.instance.userProfile;
+    final merchant = profile?['merchantId']?.toString().trim() ??
+        profile?['merchant_id']?.toString().trim() ??
+        profile?['id_merchant']?.toString().trim();
+    return (merchant == null || merchant.isEmpty) ? null : merchant;
+  }
+
+  Future<void> _handleOptionTap(int index, _RechargeOption option) async {
+    if (!option.isCustom) {
+      setState(() => _selectedIndex = index);
+      return;
+    }
+    final amount = await _promptCustomAmount();
+    if (!mounted) return;
+    if (amount == null || amount <= 0) {
+      _showSnack(AppLocalizations.of(context).rechargePrompt);
+      return;
+    }
+    setState(() {
+      _customAmount = amount;
+      _selectedIndex = index;
+    });
+  }
+
+  Future<int?> _promptCustomAmount() async {
+    final controller = TextEditingController(
+      text: _customAmount > 0 ? _customAmount.toString() : '',
+    );
+    return showAppDialog<int>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final l10n = AppLocalizations.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+                Text(
+                  l10n.rechargeCustom,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    hintText: l10n.rechargeCustomHint,
+                    filled: true,
+                    fillColor: const Color(0xFFF4F6F9),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final text = controller.text.trim();
+                      final value = int.tryParse(text) ?? 0;
+                      Navigator.of(dialogContext).pop(value > 0 ? value : null);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.ok,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleTopup() async {
     if (_isSubmitting) return;
     var walletId = SessionManager.instance.customerWalletId ?? '';
@@ -185,12 +432,17 @@ class _RechargeScreenState extends State<RechargeScreen> {
       }
     }
     final selected = _options[_selectedIndex];
+    final amount = selected.isCustom ? _customAmount : selected.amount;
+    if (amount <= 0) {
+      _showSnack(AppLocalizations.of(context).rechargePrompt);
+      return;
+    }
     setState(() => _isSubmitting = true);
     try {
       await SessionManager.instance.clearPendingTopup();
       final res = await _topupService.createSnap(
         customerWalletId: walletId,
-        amount: selected.amount,
+        amount: amount,
         isSandbox: false,
       );
       if (!mounted) return;
@@ -425,20 +677,29 @@ class _RechargeOption {
   const _RechargeOption({
     required this.amount,
     required this.bonus,
+    this.isCustom = false,
   });
+
+  const _RechargeOption.custom()
+      : amount = 0,
+        bonus = 0,
+        isCustom = true;
 
   final int amount;
   final int bonus;
+  final bool isCustom;
 }
 
 class _RechargeOptionCard extends StatelessWidget {
   const _RechargeOptionCard({
     required this.option,
+    required this.customAmount,
     required this.isSelected,
     required this.onTap,
   });
 
   final _RechargeOption option;
+  final int customAmount;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -453,6 +714,14 @@ class _RechargeOptionCard extends StatelessWidget {
         isSelected ? const Color(0xFF0DA2E6) : const Color(0xFFE6EBF3);
     final bonusColor =
         isSelected ? Colors.white : const Color(0xFF9AA0AA);
+    final l10n = AppLocalizations.of(context);
+    final isCustom = option.isCustom;
+    final title = isCustom ? l10n.rechargeCustom : _formatRupiah(option.amount);
+    final bonusText = isCustom
+        ? (customAmount > 0
+            ? _formatRupiah(customAmount)
+            : l10n.rechargeCustomHint)
+        : '${l10n.bonus} ${_formatRupiah(option.bonus)}';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -467,7 +736,7 @@ class _RechargeOptionCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              _formatRupiah(option.amount),
+              title,
               style: GoogleFonts.poppins(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -484,7 +753,7 @@ class _RechargeOptionCard extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-              '${AppLocalizations.of(context).bonus} ${_formatRupiah(option.bonus)}',
+                  bonusText,
                   style: GoogleFonts.poppins(
                     fontSize: 8.5,
                     fontWeight: FontWeight.w600,

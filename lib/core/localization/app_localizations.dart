@@ -144,6 +144,8 @@ class AppLocalizations {
       'speed_label': 'Speed',
       'recharge_title': 'Top Up',
       'recharge_prompt': 'Enter top up amount',
+      'recharge_custom': 'Custom',
+      'recharge_custom_hint': 'Set amount',
       'bonus': 'Bonus',
       'welcome_back': 'Welcome back!',
       'login_subtitle': 'Sign in to continue your ride with Gridwiz E-Motor.',
@@ -431,6 +433,8 @@ class AppLocalizations {
       'speed_label': 'Speed',
       'recharge_title': 'Isi Ulang',
       'recharge_prompt': 'Masukkan jumlah isi ulang',
+      'recharge_custom': 'Kustom',
+      'recharge_custom_hint': 'Atur jumlah',
       'bonus': 'Bonus',
       'welcome_back': 'Selamat datang!',
       'login_subtitle':
@@ -840,6 +844,8 @@ class AppLocalizations {
   String get speedLabel => _t('speed_label');
   String get rechargeTitle => _t('recharge_title');
   String get rechargePrompt => _t('recharge_prompt');
+  String get rechargeCustom => _t('recharge_custom');
+  String get rechargeCustomHint => _t('recharge_custom_hint');
   String get bonus => _t('bonus');
   String get errorNetworkGeneric => _t('error_network_generic');
   String get errorSessionExpired => _t('error_session_expired');
