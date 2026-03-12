@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:midtrans_sdk/midtrans_sdk.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../components/app_motion.dart';
 import '../../../components/app_feedback.dart';
 import '../../../core/session/session_manager.dart';
 import '../../../core/network/api_config.dart';
+import '../../../core/navigation/app_route.dart';
 import '../data/topup_service.dart';
 import '../../profile/data/user_service.dart';
+import '../../payment/presentation/payment_webview_screen.dart';
 class RechargeScreen extends StatefulWidget {
   const RechargeScreen({super.key});
 
@@ -31,20 +31,6 @@ class _RechargeScreenState extends State<RechargeScreen> {
   bool _isSubmitting = false;
   final TopupService _topupService = TopupService();
   final UserService _userService = UserService();
-  MidtransSDK? _midtrans;
-  bool _midtransReady = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initMidtrans();
-  }
-
-  @override
-  void dispose() {
-    _midtrans?.removeTransactionFinishedCallback();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -188,10 +174,11 @@ class _RechargeScreenState extends State<RechargeScreen> {
 
   Future<void> _handleTopup() async {
     if (_isSubmitting) return;
-    final l10n = AppLocalizations.of(context);
     var walletId = SessionManager.instance.customerWalletId ?? '';
     if (walletId.isEmpty) {
       walletId = await _ensureWalletId();
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       if (walletId.isEmpty) {
         _showMidtransNotReadyDialog(message: l10n.topupWalletMissing);
         return;
@@ -207,25 +194,35 @@ class _RechargeScreenState extends State<RechargeScreen> {
         isSandbox: false,
       );
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       if (res == null || res.snapToken.isEmpty) {
         _showSnack(l10n.topupFailed);
-        return;
-      }
-      if (!_midtransReady || _midtrans == null) {
-        await _initMidtrans();
-      }
-      if (!_midtransReady || _midtrans == null) {
-        _showMidtransNotReadyDialog();
         return;
       }
       await SessionManager.instance.savePendingTopup(
         snapToken: res.snapToken,
         orderId: res.orderId,
       );
-      await _midtrans!.startPaymentUiFlow(token: res.snapToken);
-      if (mounted) _showSnack(l10n.topupRedirected);
+      if (!mounted) return;
+      final webUrl = _resolveMidtransUrl(res.redirectUrl, res.snapToken);
+      if (webUrl.isEmpty) {
+        _showMidtransNotReadyDialog(message: l10n.snapTokenMissing);
+        return;
+      }
+      final resultStatus = await Navigator.of(context).push(
+        appRoute(
+          PaymentWebViewScreen(
+            url: webUrl,
+            paymentId: res.orderId,
+          ),
+          direction: AxisDirection.left,
+        ),
+      );
+      if (!mounted) return;
+      await _handleTopupResult(resultStatus);
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         final msg = e.toString().replaceAll('Exception:', '').trim();
         _showMidtransNotReadyDialog(
           message: msg.isEmpty ? l10n.topupFailed : msg,
@@ -338,69 +335,37 @@ class _RechargeScreenState extends State<RechargeScreen> {
     return SessionManager.instance.customerWalletId ?? '';
   }
 
-  Future<void> _initMidtrans() async {
-    final merchantUrl = _normalizeMerchantUrl(ApiConfig.midtransMerchantBaseUrl);
-    if (ApiConfig.midtransClientKey.isEmpty || merchantUrl.isEmpty) {
-      return;
-    }
-    try {
-      if (kDebugMode) {
-        debugPrint('midtrans init clientKeyLen=${ApiConfig.midtransClientKey.length}');
-        debugPrint('midtrans merchantUrl=$merchantUrl');
-      }
-      final midtrans = await MidtransSDK.init(
-        config: MidtransConfig(
-          clientKey: ApiConfig.midtransClientKey,
-          merchantBaseUrl: merchantUrl,
-          enableLog: kDebugMode,
-          colorTheme: ColorTheme(
-            colorPrimary: const Color(0xFF2C7BFE),
-            colorPrimaryDark: const Color(0xFF2C7BFE),
-            colorSecondary: const Color(0xFF2C7BFE),
-          ),
-        ),
-      );
-      midtrans.setTransactionFinishedCallback(_handleMidtransResult);
-      if (mounted) {
-        setState(() {
-          _midtrans = midtrans;
-          _midtransReady = true;
-        });
-      } else {
-        _midtrans = midtrans;
-        _midtransReady = true;
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _midtransReady = false);
-      }
-    }
+  String _resolveMidtransUrl(String redirectUrl, String token) {
+    final cleaned = redirectUrl.trim();
+    if (cleaned.isNotEmpty) return cleaned;
+    if (token.isEmpty) return '';
+    final base = ApiConfig.midtransMerchantBaseUrl.toLowerCase();
+    final apiBase = ApiConfig.baseUrl.toLowerCase();
+    final isSandbox =
+        base.contains('sandbox') ||
+        base.contains('staging') ||
+        base.contains('dev') ||
+        apiBase.contains('sandbox') ||
+        apiBase.contains('staging') ||
+        apiBase.contains('dev');
+    final host =
+        isSandbox ? 'https://app.sandbox.midtrans.com' : 'https://app.midtrans.com';
+    return '$host/snap/v2/vtweb/$token';
   }
 
-  String _normalizeMerchantUrl(String value) {
-    var url = value.trim();
-    if (url.endsWith('/')) {
-      url = url.substring(0, url.length - 1);
-    }
-    if (url.endsWith('/api')) {
-      url = url.substring(0, url.length - 4);
-    }
-    return url;
-  }
-
-  void _handleMidtransResult(TransactionResult result) {
-    final status = result.status.toLowerCase();
-    if (status == 'success' || status == 'settlement' || status == 'capture') {
-      SessionManager.instance.clearPendingTopup();
-      _refreshBalance();
-      _showSnack(AppLocalizations.of(context).paymentSuccess);
+  Future<void> _handleTopupResult(dynamic resultStatus) async {
+    final l10n = AppLocalizations.of(context);
+    if (resultStatus == PaymentWebViewResult.success) {
+      await SessionManager.instance.clearPendingTopup();
+      await _refreshBalance();
+      _showSnack(l10n.paymentSuccess);
       return;
     }
-    if (status == 'pending') {
-      _showSnack(AppLocalizations.of(context).paymentPendingBody);
+    if (resultStatus == PaymentWebViewResult.failed) {
+      _showSnack(l10n.paymentFailed);
       return;
     }
-    _showSnack(AppLocalizations.of(context).paymentFailed);
+    _showSnack(l10n.paymentPendingBody);
   }
 
   Future<void> _refreshBalance() async {
@@ -418,14 +383,23 @@ class _RechargeScreenState extends State<RechargeScreen> {
   Future<void> _retryPendingTopup() async {
     final token = SessionManager.instance.pendingTopupSnapToken ?? '';
     if (token.isEmpty) return;
-    if (!_midtransReady || _midtrans == null) {
-      await _initMidtrans();
-    }
-    if (!_midtransReady || _midtrans == null) {
+    final orderId = SessionManager.instance.pendingTopupOrderId ?? '';
+    final webUrl = _resolveMidtransUrl('', token);
+    if (webUrl.isEmpty) {
       _showMidtransNotReadyDialog();
       return;
     }
-    await _midtrans!.startPaymentUiFlow(token: token);
+    final resultStatus = await Navigator.of(context).push(
+      appRoute(
+        PaymentWebViewScreen(
+          url: webUrl,
+          paymentId: orderId,
+        ),
+        direction: AxisDirection.left,
+      ),
+    );
+    if (!mounted) return;
+    await _handleTopupResult(resultStatus);
   }
 
   Future<void> _clearPendingTopup() async {
