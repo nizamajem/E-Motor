@@ -14,7 +14,9 @@ import '../../../core/session/session_manager.dart';
 import '../../../core/localization/app_localizations.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.isActive = false});
+
+  final bool isActive;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -30,6 +32,14 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refreshProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _refreshProfile();
+    }
   }
 
   @override
@@ -55,6 +65,16 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       if (profile != null) {
         await SessionManager.instance.saveUserProfile(profile);
+        final customer = profile['Customer'] ?? profile['customer'];
+        if (customer is Map<String, dynamic>) {
+          final wallet =
+              customer['CustomerWallet'] ??
+              customer['customerWallet'] ??
+              customer['customer_wallet'];
+          if (wallet is Map<String, dynamic>) {
+            await SessionManager.instance.saveWalletProfile(wallet);
+          }
+        }
         if (mounted) {
           setState(() {});
         }

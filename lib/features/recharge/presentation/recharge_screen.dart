@@ -424,12 +424,15 @@ class _RechargeScreenState extends State<RechargeScreen> {
 
   Future<void> _handleTopup() async {
     if (_isSubmitting) return;
+    var customerId = SessionManager.instance.customerId ?? '';
     var walletId = SessionManager.instance.customerWalletId ?? '';
-    if (walletId.isEmpty) {
-      walletId = await _ensureWalletId();
+    if (customerId.isEmpty || walletId.isEmpty) {
+      final resolved = await _ensureCustomerData();
+      customerId = resolved.$1;
+      walletId = resolved.$2;
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      if (walletId.isEmpty) {
+      if (customerId.isEmpty && walletId.isEmpty) {
         _showMidtransNotReadyDialog(message: l10n.topupWalletMissing);
         return;
       }
@@ -444,6 +447,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
     try {
       await SessionManager.instance.clearPendingTopup();
       final res = await _topupService.createSnap(
+        customerId: customerId,
         customerWalletId: walletId,
         amount: amount,
         isSandbox: false,
@@ -469,6 +473,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
           PaymentWebViewScreen(
             url: webUrl,
             paymentId: res.orderId,
+            statusMode: PaymentStatusMode.topup,
           ),
           direction: AxisDirection.left,
         ),
@@ -577,17 +582,25 @@ class _RechargeScreenState extends State<RechargeScreen> {
     );
   }
 
-  Future<String> _ensureWalletId() async {
+  Future<(String, String)> _ensureCustomerData() async {
     try {
       final userId = await SessionManager.instance.resolveUserId();
-      if (userId.isEmpty) return '';
+      if (userId.isEmpty) {
+        return (
+          SessionManager.instance.customerId ?? '',
+          SessionManager.instance.customerWalletId ?? '',
+        );
+      }
       final profile = await _userService.fetchUserById(userId);
       if (profile != null) {
         await SessionManager.instance.saveUserProfile(profile);
         if (mounted) setState(() {});
       }
     } catch (_) {}
-    return SessionManager.instance.customerWalletId ?? '';
+    return (
+      SessionManager.instance.customerId ?? '',
+      SessionManager.instance.customerWalletId ?? '',
+    );
   }
 
   String _resolveMidtransUrl(String redirectUrl, String token) {
@@ -613,7 +626,8 @@ class _RechargeScreenState extends State<RechargeScreen> {
     if (resultStatus == PaymentWebViewResult.success) {
       await SessionManager.instance.clearPendingTopup();
       await _refreshBalance();
-      _showSnack(l10n.paymentSuccess);
+      if (!mounted) return;
+      await _showTopupSuccessDialog();
       return;
     }
     if (resultStatus == PaymentWebViewResult.failed) {
@@ -630,9 +644,108 @@ class _RechargeScreenState extends State<RechargeScreen> {
       final profile = await _userService.fetchUserById(userId);
       if (profile != null) {
         await SessionManager.instance.saveUserProfile(profile);
+        final customer = profile['Customer'] ?? profile['customer'];
+        if (customer is Map<String, dynamic>) {
+          final wallet =
+              customer['CustomerWallet'] ??
+              customer['customerWallet'] ??
+              customer['customer_wallet'];
+          if (wallet is Map<String, dynamic>) {
+            await SessionManager.instance.saveWalletProfile(wallet);
+          }
+        }
         if (mounted) setState(() {});
       }
     } catch (_) {}
+  }
+
+  Future<void> _showTopupSuccessDialog() async {
+    final l10n = AppLocalizations.of(context);
+    return showAppDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close),
+                      iconSize: 18,
+                      color: const Color(0xFF111827),
+                      splashRadius: 18,
+                    ),
+                  ),
+                ),
+                Image.asset(
+                  'assets/images/icon-park-solid_success.png',
+                  height: 64,
+                  width: 64,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.paymentSuccess,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.topupRedirected,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7B8190),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C7BFE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      l10n.continueLabel,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _retryPendingTopup() async {
@@ -649,6 +762,7 @@ class _RechargeScreenState extends State<RechargeScreen> {
         PaymentWebViewScreen(
           url: webUrl,
           paymentId: orderId,
+          statusMode: PaymentStatusMode.topup,
         ),
         direction: AxisDirection.left,
       ),

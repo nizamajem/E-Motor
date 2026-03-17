@@ -152,6 +152,11 @@ class SessionManager {
 
     final user = _userProfile;
     if (user is Map<String, dynamic>) {
+      final rootWallet = user['wallet'];
+      if (rootWallet is Map<String, dynamic>) {
+        final walletId = readId(rootWallet);
+        if (walletId != null) return walletId;
+      }
       final customer = user['Customer'] ?? user['customer'];
       if (customer is Map<String, dynamic>) {
         final customerWallet = customer['CustomerWallet'] ??
@@ -632,6 +637,11 @@ class SessionManager {
     _userProfile = profile;
     final prefs = await SharedPreferences.getInstance();
     await _saveMap(prefs, _keyUserJson, profile);
+    final rootWallet = profile?['wallet'];
+    if (rootWallet is Map<String, dynamic>) {
+      _walletProfile = rootWallet;
+      await _saveMap(prefs, _keyWalletJson, rootWallet);
+    }
     final verified = _parseVerified(profile);
     if (verified != null) {
       _isVerified = verified;

@@ -59,7 +59,8 @@ class ApiConfig {
       '/customer-payments/check-payment-status';
   static const String buyMembershipPath = '/membership/buy-emotor';
   static const String checkMembershipPath = '/customers/check-membership';
-  static const String topupSnapPath = '/customer-topups/snap';
+  static const String topupSnapPath = '/customer-topups/snap-token';
+  static const String topupCheckStatusPath = '/customer-topups/check-status';
   static const String rechargesPath = '/recharges';
   static const String userByIdPath = '/users';
 

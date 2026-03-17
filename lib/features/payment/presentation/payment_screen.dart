@@ -10,6 +10,8 @@ import '../../../components/loading_dialog.dart';
 import '../../../components/app_motion.dart';
 import '../../shell/main_shell.dart';
 import '../../../components/bottom_nav.dart';
+import '../../profile/data/user_service.dart';
+import '../../rental/data/emotor_service.dart';
 import '../data/payment_service.dart';
 import 'payment_webview_screen.dart';
 
@@ -48,8 +50,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _paymentFinalized = false;
   bool _statusPollCancelled = false;
   bool _statusPollRunning = false;
+  bool _loadingVisible = false;
   String _pendingPaymentId = '';
   final PaymentService _paymentService = PaymentService();
+  final EmotorService _emotorService = EmotorService();
+  final UserService _userService = UserService();
 
   @override
   void initState() {
@@ -252,6 +257,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
       },
     );
+    _loadingVisible = true;
     try {
       if (_cancelRequested) return;
       final method =
@@ -344,6 +350,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (webUrl.isEmpty) {
           throw Exception(l10n.snapTokenMissing);
         }
+        _dismissLoadingIfVisible();
         if (!context.mounted) return;
         final resultStatus = await Navigator.of(context).push(
           appRoute(
@@ -368,7 +375,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
 
       if (widget.flow == PaymentFlow.membership) {
-        await _refreshMembershipStatus();
+        await _refreshPostPaymentState();
       }
       if (kDebugMode) {
         debugPrint('payment success flow=${widget.flow} method=$method');
@@ -388,11 +395,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } finally {
       if (mounted) {
-        // ignore: use_build_context_synchronously
-        hideLoadingDialog(context);
+        _dismissLoadingIfVisible();
         setState(() => _isProcessing = false);
       }
     }
+  }
+
+  void _dismissLoadingIfVisible() {
+    if (!_loadingVisible || !mounted) return;
+    hideLoadingDialog(context);
+    _loadingVisible = false;
   }
 
   Future<void> _refreshMembershipStatus() async {
@@ -400,6 +412,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final active = await _paymentService.refreshMembershipStatus();
       SessionManager.instance.setHasActivePackage(active);
     } catch (_) {}
+  }
+
+  Future<void> _refreshUserProfile() async {
+    try {
+      final userId = await SessionManager.instance.resolveUserId();
+      if (userId.isEmpty) return;
+      final profile = await _userService.fetchUserById(userId);
+      if (profile != null) {
+        await SessionManager.instance.saveUserProfile(profile);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _refreshDashboardState() async {
+    try {
+      final customerId = SessionManager.instance.customerId ?? _resolveCustomerId();
+      if (customerId.isEmpty) return;
+      final data = await _emotorService.fetchDashboardRefresh(customerId);
+      if (data == null) return;
+      await SessionManager.instance.setDashboardData(
+        emotorNumber: data.emotorNumber,
+        packageName: data.packageName,
+        remainingSeconds: data.remainingSeconds,
+        validUntil: data.validUntil,
+        emissionReduction: data.emissionReduction,
+        rideRange: data.rideRange,
+      );
+      final hasPackage =
+          (data.validUntil != null && data.validUntil!.isAfter(DateTime.now())) ||
+          data.remainingSeconds > 0 ||
+          data.packageName.trim().isNotEmpty;
+      SessionManager.instance.setHasActivePackage(hasPackage);
+    } catch (_) {}
+  }
+
+  Future<void> _refreshPostPaymentState() async {
+    await _refreshUserProfile();
+    await _refreshMembershipStatus();
+    await _refreshDashboardState();
   }
 
   String _resolveCustomerId() {
@@ -704,15 +755,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (_paymentFinalized || !mounted) return;
     _paymentFinalized = true;
     _statusPollCancelled = true;
+    _dismissLoadingIfVisible();
     if (widget.flow == PaymentFlow.membership) {
-      await _refreshMembershipStatus();
-      SessionManager.instance.setHasActivePackage(true);
+      await _refreshPostPaymentState();
       final historyId =
           _pendingPaymentId.isNotEmpty ? _pendingPaymentId : (widget.membershipHistoryId ?? '');
       if (historyId.isNotEmpty) {
-        SessionManager.instance.clearPendingSnapToken(historyId);
-        SessionManager.instance.clearPendingRedirectUrl(historyId);
+        await SessionManager.instance.clearPendingSnapToken(historyId);
+        await SessionManager.instance.clearPendingRedirectUrl(historyId);
       }
+    } else {
+      await _refreshUserProfile();
     }
     if (mounted) {
       _showPaymentSuccess(context);
@@ -723,6 +776,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (_paymentFinalized || !mounted) return;
     _paymentFinalized = true;
     _statusPollCancelled = true;
+    _dismissLoadingIfVisible();
     _showPaymentFailed(context);
   }
 

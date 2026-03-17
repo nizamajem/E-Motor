@@ -57,7 +57,7 @@ class _MainShellState extends State<MainShell> {
     final tabs = [
       const HistoryScreen(),
       DashboardScreen(initialRental: widget.initialRental),
-      const ProfileScreen(),
+      ProfileScreen(isActive: _index == 2),
     ];
     return Scaffold(
       backgroundColor: Colors.transparent,
