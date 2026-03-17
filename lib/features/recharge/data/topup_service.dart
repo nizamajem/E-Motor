@@ -1,6 +1,7 @@
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/localization/app_localizations.dart';
+import 'package:flutter/foundation.dart';
 
 class TopupSnapResponse {
   TopupSnapResponse({
@@ -27,22 +28,37 @@ class TopupService {
   TopupService({ApiClient? client}) : _client = client ?? ApiClient();
 
   final ApiClient _client;
+  static const Duration _timeout = Duration(seconds: 20);
 
   Future<TopupSnapResponse?> createSnap({
+    required String customerId,
     required String customerWalletId,
     required int amount,
     bool isSandbox = true,
   }) async {
-    if (customerWalletId.isEmpty || amount <= 0) return null;
+    if ((customerId.isEmpty && customerWalletId.isEmpty) || amount <= 0) {
+      return null;
+    }
     try {
+      final body = <String, dynamic>{
+        'amount': amount,
+        'isSandbox': isSandbox,
+        'env': isSandbox ? 'sandbox' : 'production',
+        if (customerId.isNotEmpty) 'customerId': customerId,
+        if (customerId.isNotEmpty) 'customer_id': customerId,
+        if (customerWalletId.isNotEmpty) 'customerWalletId': customerWalletId,
+        if (customerWalletId.isNotEmpty) 'customer_wallet_id': customerWalletId,
+        if (customerWalletId.isNotEmpty) 'walletId': customerWalletId,
+        if (customerWalletId.isNotEmpty) 'wallet_id': customerWalletId,
+      };
+      if (kDebugMode) {
+        debugPrint('topup createSnap path=${ApiConfig.topupSnapPath}');
+        debugPrint('topup createSnap body=$body');
+      }
       final res = await _client.postJson(
         ApiConfig.topupSnapPath,
         auth: true,
-        body: {
-          'customerWalletId': customerWalletId,
-          'amount': amount,
-          'isSandbox': isSandbox,
-        },
+        body: body,
       );
       final data = res['data'] ?? res;
       if (data is! Map<String, dynamic>) return null;
@@ -54,5 +70,39 @@ class TopupService {
     } catch (_) {
       throw Exception(AppLocalizations.current.topupFailed);
     }
+  }
+
+  Future<String> checkTopupStatus({required String orderId}) async {
+    if (orderId.isEmpty) return '';
+    try {
+      final json = await _client
+          .getJson(
+            '${ApiConfig.topupCheckStatusPath}/$orderId',
+            auth: true,
+          )
+          .timeout(_timeout);
+      final data = json['data'] is Map<String, dynamic>
+          ? json['data'] as Map<String, dynamic>
+          : json;
+      final status = _readString(
+        data,
+        ['status', 'transaction_status', 'payment_status'],
+      );
+      if (status == null || status.isEmpty) return '';
+      return status.trim().toLowerCase();
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return '';
+      rethrow;
+    }
+  }
+
+  String? _readString(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+    return null;
   }
 }

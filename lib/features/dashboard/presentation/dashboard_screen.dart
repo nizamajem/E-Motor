@@ -187,8 +187,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           statusRaw == 'START' ||
           statusRaw == 'ENGINE_ON';
       final activeFromDashboard =
-          data.validUntil != null &&
-              data.validUntil!.isAfter(DateTime.now());
+          (data.validUntil != null &&
+              data.validUntil!.isAfter(DateTime.now())) ||
+          data.remainingSeconds > 0 ||
+          data.packageName.trim().isNotEmpty;
       if (!activeFromDashboard) {
         await SessionManager.instance.clearMembershipState();
       } else {
@@ -219,7 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _startMembershipRefresh() {
     _membershipRefreshTimer?.cancel();
     _membershipRefreshTimer = Timer.periodic(
-      const Duration(minutes: 3),
+      const Duration(seconds: 15),
       (_) {
         _checkMembershipStatus();
         _refreshDashboard();

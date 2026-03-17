@@ -6,35 +6,43 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_localizations.dart';
+import '../../recharge/data/topup_service.dart';
 import '../data/payment_service.dart';
 
 enum PaymentWebViewResult { success, failed, pending, cancelled }
+enum PaymentStatusMode { payment, topup }
 
 class PaymentWebViewScreen extends StatefulWidget {
   const PaymentWebViewScreen({
     super.key,
     required this.url,
     required this.paymentId,
+    this.statusMode = PaymentStatusMode.payment,
   });
 
   final String url;
   final String paymentId;
+  final PaymentStatusMode statusMode;
 
   @override
   State<PaymentWebViewScreen> createState() => _PaymentWebViewScreenState();
 }
 
-class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
+class _PaymentWebViewScreenState extends State<PaymentWebViewScreen>
+    with WidgetsBindingObserver {
   final PaymentService _paymentService = PaymentService();
+  final TopupService _topupService = TopupService();
   late final WebViewController _controller;
   Timer? _pollTimer;
   bool _finished = false;
   bool _isLoading = true;
   String? _loadError;
+  bool _pollInFlight = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(
@@ -53,6 +61,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
           onPageFinished: (_) {
             if (!mounted) return;
             setState(() => _isLoading = false);
+            _checkPaymentStatusOnce();
           },
           onWebResourceError: (error) {
             if (!mounted) return;
@@ -63,6 +72,11 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
           },
           onNavigationRequest: (request) async {
             final url = request.url;
+            final resolved = _resolveResultFromUrl(url);
+            if (resolved != null) {
+              _finish(resolved);
+              return NavigationDecision.prevent;
+            }
             final lower = url.toLowerCase();
             if (lower.startsWith('http://') || lower.startsWith('https://')) {
               return NavigationDecision.navigate;
@@ -85,37 +99,87 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPaymentStatusOnce();
+    }
   }
 
   void _startPolling() {
     if (widget.paymentId.isEmpty) return;
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (_finished) return;
-      try {
-        final status = await _paymentService.checkPaymentStatus(
-          paymentId: widget.paymentId,
-        );
-        if (status.isEmpty) return;
-        if (status == 'success' ||
-            status == 'settlement' ||
-            status == 'capture') {
-          _finish(PaymentWebViewResult.success);
-          return;
-        }
-        if (status == 'failed' ||
-            status == 'failure' ||
-            status == 'deny' ||
-            status == 'cancel' ||
-            status == 'expire') {
-          _finish(PaymentWebViewResult.failed);
-        }
-      } catch (_) {
-        // ignore polling errors
-      }
+      await _checkPaymentStatusOnce();
     });
+  }
+
+  Future<void> _checkPaymentStatusOnce() async {
+    if (_finished || widget.paymentId.isEmpty || _pollInFlight) return;
+    _pollInFlight = true;
+    try {
+      final status = widget.statusMode == PaymentStatusMode.topup
+          ? await _topupService.checkTopupStatus(orderId: widget.paymentId)
+          : await _paymentService.checkPaymentStatus(
+              paymentId: widget.paymentId,
+            );
+      if (status.isEmpty) return;
+      if (status == 'success' ||
+          status == 'settlement' ||
+          status == 'capture') {
+        _finish(PaymentWebViewResult.success);
+        return;
+      }
+      if (status == 'failed' ||
+          status == 'failure' ||
+          status == 'deny' ||
+          status == 'cancel' ||
+          status == 'expire') {
+        _finish(PaymentWebViewResult.failed);
+      }
+    } catch (_) {
+      // ignore polling errors
+    } finally {
+      _pollInFlight = false;
+    }
+  }
+
+  PaymentWebViewResult? _resolveResultFromUrl(String url) {
+    final lower = url.toLowerCase();
+    final uri = Uri.tryParse(url);
+    final statusCode = uri?.queryParameters['status_code']?.trim();
+    final transactionStatus =
+        uri?.queryParameters['transaction_status']?.trim().toLowerCase();
+
+    final looksSuccessful = statusCode == '200' ||
+        transactionStatus == 'settlement' ||
+        transactionStatus == 'capture' ||
+        transactionStatus == 'success' ||
+        lower.contains('transaction_status=settlement') ||
+        lower.contains('transaction_status=capture') ||
+        lower.contains('transaction_status=success');
+    if (looksSuccessful) {
+      return PaymentWebViewResult.success;
+    }
+
+    final looksFailed = transactionStatus == 'deny' ||
+        transactionStatus == 'cancel' ||
+        transactionStatus == 'expire' ||
+        transactionStatus == 'failure' ||
+        lower.contains('transaction_status=deny') ||
+        lower.contains('transaction_status=cancel') ||
+        lower.contains('transaction_status=expire') ||
+        lower.contains('transaction_status=failure');
+    if (looksFailed) {
+      return PaymentWebViewResult.failed;
+    }
+
+    return null;
   }
 
   void _finish(PaymentWebViewResult result) {

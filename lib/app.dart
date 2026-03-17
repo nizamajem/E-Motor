@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_navigator.dart';
@@ -16,31 +17,36 @@ class EMotorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasSession = SessionManager.instance.token != null;
     final seenOnboarding = SessionManager.instance.onboardingSeen;
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      navigatorKey: AppNavigator.key,
-      supportedLocales: AppLocalizations.supportedLocales,
-      localeResolutionCallback: (locale, supported) {
-        final code = locale?.languageCode.toLowerCase() ?? 'en';
-        if (code == 'id') {
-          return const Locale('id');
-        }
-        if (code == 'en') {
+    return ScreenUtilInit(
+      designSize: const Size(360, 800),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (_, __) => MaterialApp(
+        onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        navigatorKey: AppNavigator.key,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localeResolutionCallback: (locale, supported) {
+          final code = locale?.languageCode.toLowerCase() ?? 'en';
+          if (code == 'id') {
+            return const Locale('id');
+          }
+          if (code == 'en') {
+            return const Locale('en');
+          }
           return const Locale('en');
-        }
-        return const Locale('en');
-      },
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: seenOnboarding
-          ? (hasSession ? const MainShell() : const LoginScreen())
-          : const OnboardingScreen(),
+        },
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: seenOnboarding
+            ? (hasSession ? const MainShell() : const LoginScreen())
+            : const OnboardingScreen(),
+      ),
     );
   }
 }
